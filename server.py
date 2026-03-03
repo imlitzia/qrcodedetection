@@ -12,6 +12,16 @@ import sys
 
 PORT = 8443
 
+class NoCacheHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
+    """HTTP handler that prevents caching"""
+    
+    def end_headers(self):
+        # Add headers to prevent caching
+        self.send_header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+        self.send_header('Pragma', 'no-cache')
+        self.send_header('Expires', '0')
+        super().end_headers()
+
 def get_local_ip():
     """Get the local IP address of this machine."""
     try:
@@ -34,7 +44,6 @@ def generate_ssl_cert():
     
     print("Generating self-signed SSL certificate...")
     
-    # Generate self-signed certificate using openssl
     cmd = [
         "openssl", "req", "-x509", "-newkey", "rsa:2048",
         "-keyout", key_file, "-out", cert_file,
@@ -56,7 +65,6 @@ def generate_ssl_cert():
 def main():
     os.chdir(os.path.dirname(os.path.abspath(__file__)))
     
-    # Generate SSL certificate
     cert_file, key_file = generate_ssl_cert()
     
     if not cert_file or not key_file:
@@ -67,7 +75,7 @@ def main():
     
     print()
     print("=" * 65)
-    print("  QR CODE DETECTOR - HTTPS Server")
+    print("  QR CODE DETECTOR - HTTPS Server (No Cache)")
     print("=" * 65)
     print()
     print("=" * 65)
@@ -75,6 +83,9 @@ def main():
     print("=" * 65)
     print()
     print(f"    https://{local_ip}:{PORT}")
+    print()
+    print("  TIP: If page doesn't update, add ?v=2 to the URL:")
+    print(f"    https://{local_ip}:{PORT}?v=2")
     print()
     print("=" * 65)
     print("  IMPORTANT - First time setup:")
@@ -97,17 +108,15 @@ def main():
     print("=" * 65)
     print()
     
-    handler = http.server.SimpleHTTPRequestHandler
-    
     try:
-        httpd = http.server.HTTPServer(("0.0.0.0", PORT), handler)
+        httpd = http.server.HTTPServer(("0.0.0.0", PORT), NoCacheHTTPRequestHandler)
         
-        # Wrap with SSL
         context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         context.load_cert_chain(cert_file, key_file)
         httpd.socket = context.wrap_socket(httpd.socket, server_side=True)
         
         print(f"HTTPS Server running on port {PORT}...")
+        print("Caching is DISABLED - changes will show immediately")
         print("Waiting for connections...")
         print()
         httpd.serve_forever()
