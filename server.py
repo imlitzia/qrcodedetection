@@ -1,6 +1,11 @@
 """
 HTTPS server for QR code detector web app.
 Uses a self-signed certificate for camera access on mobile.
+
+Pages:
+- /setup.html - API key configuration (start here for AI features)
+- /scanner.html - AI-powered QR scanner with categorization
+- /index.html - Basic QR scanner (no AI)
 """
 
 import http.server
@@ -71,13 +76,17 @@ def main():
     print("=" * 65)
     print()
     print("=" * 65)
-    print("  ACCESS URL (use this on your phone):")
+    print("  ACCESS URLS:")
     print("=" * 65)
     print()
-    print(f"    https://{local_ip}:{PORT}")
+    print(f"  AI Scanner (with categorization):")
+    print(f"    https://{local_ip}:{PORT}/setup.html")
+    print()
+    print(f"  Basic Scanner (no AI):")
+    print(f"    https://{local_ip}:{PORT}/index.html")
     print()
     print("=" * 65)
-    print("  IMPORTANT - First time setup:")
+    print("  FIRST TIME SETUP:")
     print("=" * 65)
     print()
     print("  When you open the URL, you'll see a security warning.")
