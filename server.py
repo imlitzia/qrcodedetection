@@ -1,6 +1,7 @@
 """
 HTTPS server for QR code detector web app.
 Uses a self-signed certificate for camera access on mobile.
+Includes cache-busting headers.
 """
 
 import http.server
@@ -11,6 +12,16 @@ import subprocess
 import sys
 
 PORT = 8443
+
+class NoCacheHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
+    """HTTP handler that prevents caching."""
+    
+    def end_headers(self):
+        # Add headers to prevent caching
+        self.send_header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+        self.send_header('Pragma', 'no-cache')
+        self.send_header('Expires', '0')
+        super().end_headers()
 
 def get_local_ip():
     """Get the local IP address of this machine."""
@@ -34,7 +45,6 @@ def generate_ssl_cert():
     
     print("Generating self-signed SSL certificate...")
     
-    # Generate self-signed certificate using openssl
     cmd = [
         "openssl", "req", "-x509", "-newkey", "rsa:2048",
         "-keyout", key_file, "-out", cert_file,
@@ -56,7 +66,6 @@ def generate_ssl_cert():
 def main():
     os.chdir(os.path.dirname(os.path.abspath(__file__)))
     
-    # Generate SSL certificate
     cert_file, key_file = generate_ssl_cert()
     
     if not cert_file or not key_file:
@@ -67,42 +76,30 @@ def main():
     
     print()
     print("=" * 65)
-    print("  QR CODE DETECTOR - HTTPS Server")
+    print("  QR CODE DETECTOR - HTTPS Server (No Cache)")
     print("=" * 65)
     print()
-    print("=" * 65)
-    print("  ACCESS URL (use this on your phone):")
-    print("=" * 65)
+    print("  ACCESS URL:")
     print()
     print(f"    https://{local_ip}:{PORT}")
     print()
     print("=" * 65)
-    print("  IMPORTANT - First time setup:")
+    print("  IMPORTANT - Clear your browser cache or use incognito!")
     print("=" * 65)
     print()
-    print("  When you open the URL, you'll see a security warning.")
-    print("  This is normal for self-signed certificates.")
+    print("  On iPhone (Safari): Settings → Safari → Clear History")
+    print("  On Android (Chrome): Menu → History → Clear browsing data")
     print()
-    print("  On iPhone (Safari):")
-    print("    1. Tap 'Show Details'")
-    print("    2. Tap 'visit this website'")
-    print("    3. Tap 'Visit Website'")
-    print()
-    print("  On Android (Chrome):")
-    print("    1. Tap 'Advanced'")
-    print("    2. Tap 'Proceed to [IP] (unsafe)'")
+    print("  Or open in Incognito/Private mode")
     print()
     print("=" * 65)
     print("  Press Ctrl+C to stop")
     print("=" * 65)
     print()
     
-    handler = http.server.SimpleHTTPRequestHandler
-    
     try:
-        httpd = http.server.HTTPServer(("0.0.0.0", PORT), handler)
+        httpd = http.server.HTTPServer(("0.0.0.0", PORT), NoCacheHTTPRequestHandler)
         
-        # Wrap with SSL
         context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         context.load_cert_chain(cert_file, key_file)
         httpd.socket = context.wrap_socket(httpd.socket, server_side=True)
