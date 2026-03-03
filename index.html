@@ -50,6 +50,50 @@
             color: var(--text-dim);
             margin-top: 4px;
         }
+        
+        /* API Key Section */
+        .api-section {
+            max-width: 640px;
+            margin: 0 auto 15px;
+            width: 100%;
+        }
+        .api-input-group {
+            display: flex;
+            gap: 8px;
+        }
+        .api-input {
+            flex: 1;
+            padding: 10px 12px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+        }
+        .api-input:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+        .api-btn {
+            padding: 10px 16px;
+            background: var(--accent);
+            color: var(--bg-dark);
+            border: none;
+            border-radius: 8px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.75rem;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .api-status {
+            font-size: 0.7rem;
+            margin-top: 6px;
+            color: var(--text-dim);
+        }
+        .api-status.connected { color: var(--accent); }
+        .api-status.error { color: var(--warning); }
+        
         .video-container {
             position: relative;
             width: 100%;
@@ -116,7 +160,7 @@
             margin-left: auto;
             margin-right: auto;
             width: 100%;
-            max-height: 35vh;
+            max-height: 40vh;
             overflow-y: auto;
         }
         .results-header {
@@ -165,6 +209,8 @@
             justify-content: space-between;
             align-items: center;
             margin-bottom: 8px;
+            flex-wrap: wrap;
+            gap: 6px;
         }
         .qr-badge {
             background: var(--accent);
@@ -175,6 +221,37 @@
             border-radius: 15px;
         }
         .qr-time { font-size: 0.65rem; color: var(--text-dim); }
+        
+        /* Category Badge */
+        .category-badge {
+            font-size: 0.6rem;
+            font-weight: 600;
+            padding: 3px 10px;
+            border-radius: 15px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .category-food { background: #ff6b6b; color: #fff; }
+        .category-technology { background: #4dabf7; color: #fff; }
+        .category-shopping { background: #ff9f43; color: #fff; }
+        .category-social { background: #a855f7; color: #fff; }
+        .category-finance { background: #22c55e; color: #fff; }
+        .category-entertainment { background: #ec4899; color: #fff; }
+        .category-travel { background: #06b6d4; color: #fff; }
+        .category-education { background: #8b5cf6; color: #fff; }
+        .category-health { background: #10b981; color: #fff; }
+        .category-news { background: #6366f1; color: #fff; }
+        .category-other { background: #64748b; color: #fff; }
+        .category-loading { 
+            background: var(--border); 
+            color: var(--text-dim);
+            animation: shimmer 1.5s infinite;
+        }
+        @keyframes shimmer {
+            0%, 100% { opacity: 0.5; }
+            50% { opacity: 1; }
+        }
+        
         .qr-data {
             font-size: 0.8rem;
             word-break: break-all;
@@ -257,9 +334,18 @@
 <body>
     <div class="container">
         <header>
-            <h1>⬡ Multi-QR Detector</h1>
-            <p class="subtitle">Detects multiple grouped QR codes</p>
+            <h1>⬡ Smart QR Detector</h1>
+            <p class="subtitle">AI-powered QR categorization</p>
         </header>
+
+        <!-- API Key Input -->
+        <div class="api-section">
+            <div class="api-input-group">
+                <input type="password" id="apiKey" class="api-input" placeholder="Enter OpenRouter API Key">
+                <button id="saveApiBtn" class="api-btn">Save</button>
+            </div>
+            <div id="apiStatus" class="api-status">Enter your OpenRouter API key to enable AI categorization</div>
+        </div>
 
         <button id="startBtn" class="start-btn">Start Camera</button>
         <div id="errorBanner" class="error-banner hidden"></div>
@@ -316,15 +402,120 @@
         const totalScannedEl = document.getElementById('totalScanned');
         const qrListEl = document.getElementById('qrList');
         const toast = document.getElementById('toast');
+        const apiKeyInput = document.getElementById('apiKey');
+        const saveApiBtn = document.getElementById('saveApiBtn');
+        const apiStatus = document.getElementById('apiStatus');
 
         let scanning = false;
         let scanCount = 0;
         let lastTime = performance.now();
         let totalScanned = 0;
         let detectedQRs = new Map();
-        let activeQRs = new Map(); // data -> location
+        let activeQRs = new Map();
         let canvas, ctx;
         let regionCanvas, regionCtx;
+        let openRouterApiKey = localStorage.getItem('openRouterApiKey') || '';
+
+        // Category definitions
+        const CATEGORIES = {
+            'food': { name: 'Food & Beverage', class: 'category-food', icon: '🍔' },
+            'technology': { name: 'Technology', class: 'category-technology', icon: '💻' },
+            'shopping': { name: 'Shopping', class: 'category-shopping', icon: '🛒' },
+            'social': { name: 'Social Media', class: 'category-social', icon: '📱' },
+            'finance': { name: 'Finance', class: 'category-finance', icon: '💰' },
+            'entertainment': { name: 'Entertainment', class: 'category-entertainment', icon: '🎬' },
+            'travel': { name: 'Travel', class: 'category-travel', icon: '✈️' },
+            'education': { name: 'Education', class: 'category-education', icon: '📚' },
+            'health': { name: 'Health', class: 'category-health', icon: '🏥' },
+            'news': { name: 'News & Media', class: 'category-news', icon: '📰' },
+            'other': { name: 'Other', class: 'category-other', icon: '📎' }
+        };
+
+        // Initialize API key from localStorage
+        if (openRouterApiKey) {
+            apiKeyInput.value = openRouterApiKey;
+            apiStatus.textContent = '✓ API key saved';
+            apiStatus.className = 'api-status connected';
+        }
+
+        // Save API key
+        saveApiBtn.addEventListener('click', () => {
+            openRouterApiKey = apiKeyInput.value.trim();
+            if (openRouterApiKey) {
+                localStorage.setItem('openRouterApiKey', openRouterApiKey);
+                apiStatus.textContent = '✓ API key saved';
+                apiStatus.className = 'api-status connected';
+                showToast('API key saved!');
+            } else {
+                localStorage.removeItem('openRouterApiKey');
+                apiStatus.textContent = 'Enter your OpenRouter API key';
+                apiStatus.className = 'api-status';
+            }
+        });
+
+        // Categorize QR code using LLM
+        async function categorizeWithLLM(qrData) {
+            if (!openRouterApiKey) {
+                return 'other';
+            }
+
+            try {
+                const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${openRouterApiKey}`,
+                        'HTTP-Referer': window.location.href,
+                        'X-Title': 'QR Code Detector'
+                    },
+                    body: JSON.stringify({
+                        model: 'meta-llama/llama-3.2-3b-instruct:free',
+                        messages: [
+                            {
+                                role: 'system',
+                                content: `You are a categorization assistant. Analyze the QR code content and respond with ONLY ONE of these category names (lowercase, no explanation):
+- food (restaurants, cafes, food delivery, beverages like Starbucks, McDonald's, etc.)
+- technology (tech companies, software, hardware, IT like Lenovo, Apple, Microsoft, etc.)
+- shopping (e-commerce, retail stores like Amazon, eBay, Walmart, etc.)
+- social (social media platforms like Facebook, Instagram, Twitter, etc.)
+- finance (banks, payment, cryptocurrency like PayPal, Visa, etc.)
+- entertainment (movies, music, games, streaming like Netflix, Spotify, etc.)
+- travel (airlines, hotels, booking like Airbnb, Booking.com, etc.)
+- education (schools, courses, learning platforms like Coursera, etc.)
+- health (hospitals, pharmacies, fitness like CVS, etc.)
+- news (news websites, media outlets like CNN, BBC, etc.)
+- other (anything that doesn't fit above categories)
+
+Respond with ONLY the category name, nothing else.`
+                            },
+                            {
+                                role: 'user',
+                                content: `Categorize this QR code content: ${qrData}`
+                            }
+                        ],
+                        max_tokens: 20,
+                        temperature: 0.1
+                    })
+                });
+
+                if (!response.ok) {
+                    console.error('LLM API error:', response.status);
+                    return 'other';
+                }
+
+                const data = await response.json();
+                const category = data.choices[0]?.message?.content?.trim().toLowerCase() || 'other';
+                
+                // Validate category
+                if (CATEGORIES[category]) {
+                    return category;
+                }
+                return 'other';
+            } catch (error) {
+                console.error('LLM categorization error:', error);
+                return 'other';
+            }
+        }
 
         function showToast(msg) {
             toast.textContent = msg;
@@ -353,11 +544,9 @@
                 startBtn.classList.add('hidden');
                 videoSection.classList.remove('hidden');
 
-                // Create main canvas
                 canvas = document.createElement('canvas');
                 ctx = canvas.getContext('2d', { willReadFrequently: true });
                 
-                // Create region canvas for sub-scanning
                 regionCanvas = document.createElement('canvas');
                 regionCtx = regionCanvas.getContext('2d', { willReadFrequently: true });
 
@@ -379,24 +568,21 @@
             }
         }
 
-        // Multi-region scanning for grouped QR codes
         function detectMultipleQRCodes() {
             ctx.drawImage(video, 0, 0);
             const fullImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
             
-            const results = new Map(); // Use map to dedupe by data
+            const results = new Map();
             const w = canvas.width;
             const h = canvas.height;
 
-            // 1. First scan the FULL frame
             const fullResult = jsQR(fullImageData.data, w, h, { inversionAttempts: 'dontInvert' });
             if (fullResult && fullResult.data) {
                 results.set(fullResult.data, fullResult);
             }
 
-            // 2. Scan overlapping grid regions (3x3 grid with overlap)
             const gridSize = 3;
-            const overlap = 0.3; // 30% overlap between regions
+            const overlap = 0.3;
             
             for (let row = 0; row < gridSize; row++) {
                 for (let col = 0; col < gridSize; col++) {
@@ -405,7 +591,6 @@
                     const startX = Math.floor(col * (w - regionW) / (gridSize - 1));
                     const startY = Math.floor(row * (h - regionH) / (gridSize - 1));
                     
-                    // Clamp to bounds
                     const actualW = Math.min(regionW, w - startX);
                     const actualH = Math.min(regionH, h - startY);
                     
@@ -414,7 +599,6 @@
                         const result = jsQR(regionData.data, actualW, actualH, { inversionAttempts: 'dontInvert' });
                         
                         if (result && result.data && !results.has(result.data)) {
-                            // Adjust coordinates back to full frame
                             result.location.topLeftCorner.x += startX;
                             result.location.topLeftCorner.y += startY;
                             result.location.topRightCorner.x += startX;
@@ -429,15 +613,14 @@
                 }
             }
 
-            // 3. Scan quadrants with different sizes
             const quadrants = [
-                { x: 0, y: 0, w: w * 0.55, h: h * 0.55 },           // Top-left
-                { x: w * 0.45, y: 0, w: w * 0.55, h: h * 0.55 },    // Top-right
-                { x: 0, y: h * 0.45, w: w * 0.55, h: h * 0.55 },    // Bottom-left
-                { x: w * 0.45, y: h * 0.45, w: w * 0.55, h: h * 0.55 }, // Bottom-right
-                { x: w * 0.2, y: h * 0.2, w: w * 0.6, h: h * 0.6 }, // Center
-                { x: 0, y: h * 0.25, w: w, h: h * 0.5 },            // Middle horizontal strip
-                { x: w * 0.25, y: 0, w: w * 0.5, h: h },            // Middle vertical strip
+                { x: 0, y: 0, w: w * 0.55, h: h * 0.55 },
+                { x: w * 0.45, y: 0, w: w * 0.55, h: h * 0.55 },
+                { x: 0, y: h * 0.45, w: w * 0.55, h: h * 0.55 },
+                { x: w * 0.45, y: h * 0.45, w: w * 0.55, h: h * 0.55 },
+                { x: w * 0.2, y: h * 0.2, w: w * 0.6, h: h * 0.6 },
+                { x: 0, y: h * 0.25, w: w, h: h * 0.5 },
+                { x: w * 0.25, y: 0, w: w * 0.5, h: h },
             ];
 
             quadrants.forEach(q => {
@@ -464,7 +647,6 @@
                 }
             });
 
-            // 4. Try with enhanced contrast on full image
             if (results.size < 3) {
                 const enhanced = enhanceContrast(fullImageData);
                 const enhancedResult = jsQR(enhanced.data, w, h, { inversionAttempts: 'attemptBoth' });
@@ -479,7 +661,6 @@
         function enhanceContrast(imageData) {
             const data = new Uint8ClampedArray(imageData.data);
             
-            // Find min/max for contrast stretching
             let min = 255, max = 0;
             for (let i = 0; i < data.length; i += 4) {
                 const gray = (data[i] + data[i + 1] + data[i + 2]) / 3;
@@ -514,7 +695,6 @@
             const results = detectMultipleQRCodes();
             const currentActive = new Map();
             
-            // Clear overlay
             overlay.innerHTML = '';
             
             let idx = 1;
@@ -533,31 +713,42 @@
             requestAnimationFrame(scanLoop);
         }
 
-        function processQR(data) {
+        async function processQR(data) {
             if (!detectedQRs.has(data)) {
                 totalScanned++;
                 totalScannedEl.textContent = totalScanned;
                 totalScannedEl.classList.remove('zero');
                 
+                // Add with loading category first
                 detectedQRs.set(data, {
                     data,
                     timestamp: new Date().toLocaleTimeString(),
-                    index: detectedQRs.size + 1
+                    index: detectedQRs.size + 1,
+                    category: 'loading'
                 });
                 
                 updateQRList();
                 showToast(`QR #${detectedQRs.size} found!`);
+                
+                // Categorize with LLM in background
+                const category = await categorizeWithLLM(data);
+                
+                // Update category
+                const qrInfo = detectedQRs.get(data);
+                if (qrInfo) {
+                    qrInfo.category = category;
+                    detectedQRs.set(data, qrInfo);
+                    updateQRList();
+                }
             }
         }
 
         function drawOverlay(loc, index) {
             const ns = 'http://www.w3.org/2000/svg';
             
-            // Colors for different QR codes
             const colors = ['#00ffb4', '#ff9f43', '#ff6b9d', '#9d65ff', '#65d9ff', '#ffeb3b'];
             const color = colors[(index - 1) % colors.length];
             
-            // Polygon fill
             const poly = document.createElementNS(ns, 'polygon');
             poly.setAttribute('points', 
                 `${loc.topLeftCorner.x},${loc.topLeftCorner.y} ` +
@@ -565,13 +756,11 @@
                 `${loc.bottomRightCorner.x},${loc.bottomRightCorner.y} ` +
                 `${loc.bottomLeftCorner.x},${loc.bottomLeftCorner.y}`
             );
-            poly.setAttribute('fill', color.replace(')', ', 0.25)').replace('rgb', 'rgba').replace('#', 'rgba('));
             poly.style.fill = `${color}40`;
             poly.setAttribute('stroke', color);
             poly.setAttribute('stroke-width', '4');
             overlay.appendChild(poly);
 
-            // Corner circles
             [loc.topLeftCorner, loc.topRightCorner, loc.bottomRightCorner, loc.bottomLeftCorner].forEach(corner => {
                 const circle = document.createElementNS(ns, 'circle');
                 circle.setAttribute('cx', corner.x);
@@ -583,7 +772,6 @@
                 overlay.appendChild(circle);
             });
 
-            // Label
             const labelY = Math.max(30, loc.topLeftCorner.y - 10);
             const rect = document.createElementNS(ns, 'rect');
             rect.setAttribute('x', loc.topLeftCorner.x);
@@ -630,10 +818,14 @@
                 item.dataset.qrData = qr.data;
                 
                 const isUrl = qr.data.startsWith('http') || qr.data.startsWith('www.');
+                const categoryInfo = CATEGORIES[qr.category] || CATEGORIES['other'];
+                const categoryClass = qr.category === 'loading' ? 'category-loading' : categoryInfo.class;
+                const categoryText = qr.category === 'loading' ? 'Analyzing...' : `${categoryInfo.icon} ${categoryInfo.name}`;
                 
                 item.innerHTML = `
                     <div class="qr-header">
                         <span class="qr-badge">QR #${qr.index}</span>
+                        <span class="category-badge ${categoryClass}">${categoryText}</span>
                         <span class="qr-time">${qr.timestamp}</span>
                     </div>
                     <div class="qr-data">${escapeHtml(qr.data)}</div>
