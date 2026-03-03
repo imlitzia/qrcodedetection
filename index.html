@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Multi-QR Detector</title>
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+    <title>Stock Tracking</title>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         :root {
@@ -25,6 +25,170 @@
             min-height: 100vh;
             overflow-x: hidden;
         }
+
+        /* Hero Page Styles */
+        .hero-page {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            background: 
+                radial-gradient(ellipse at 50% 0%, rgba(0, 255, 180, 0.08) 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 80%, rgba(255, 159, 67, 0.05) 0%, transparent 40%),
+                radial-gradient(ellipse at 20% 90%, rgba(157, 101, 255, 0.05) 0%, transparent 40%),
+                var(--bg-dark);
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .hero-page::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-image: 
+                linear-gradient(rgba(0, 255, 180, 0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0, 255, 180, 0.03) 1px, transparent 1px);
+            background-size: 50px 50px;
+            pointer-events: none;
+        }
+
+        .hero-content {
+            position: relative;
+            z-index: 1;
+            max-width: 500px;
+        }
+
+        .hero-icon {
+            width: 120px;
+            height: 120px;
+            margin: 0 auto 30px;
+            background: linear-gradient(135deg, var(--accent) 0%, var(--accent-dim) 100%);
+            border-radius: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 50px;
+            box-shadow: 
+                0 20px 60px rgba(0, 255, 180, 0.3),
+                0 0 0 1px rgba(0, 255, 180, 0.2);
+            animation: float 3s ease-in-out infinite;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+
+        .hero-title {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: var(--text);
+            margin-bottom: 12px;
+            letter-spacing: -1px;
+        }
+
+        .hero-title span {
+            color: var(--accent);
+        }
+
+        .hero-subtitle {
+            font-size: 1rem;
+            color: var(--text-dim);
+            margin-bottom: 50px;
+            line-height: 1.6;
+        }
+
+        .hero-features {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            justify-content: center;
+            margin-bottom: 50px;
+        }
+
+        .feature-tag {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 16px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border);
+            border-radius: 30px;
+            font-size: 0.8rem;
+            color: var(--text-dim);
+        }
+
+        .feature-tag .icon {
+            font-size: 1rem;
+        }
+
+        .begin-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 12px;
+            padding: 18px 40px;
+            background: linear-gradient(135deg, var(--accent) 0%, var(--accent-dim) 100%);
+            color: var(--bg-dark);
+            border: none;
+            border-radius: 16px;
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 1.1rem;
+            font-weight: 700;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            transition: all 0.3s ease;
+            box-shadow: 0 10px 40px rgba(0, 255, 180, 0.3);
+        }
+
+        .begin-btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 15px 50px rgba(0, 255, 180, 0.4);
+        }
+
+        .begin-btn:active {
+            transform: translateY(0);
+        }
+
+        .begin-btn .arrow {
+            font-size: 1.3rem;
+            transition: transform 0.3s ease;
+        }
+
+        .begin-btn:hover .arrow {
+            transform: translateX(5px);
+        }
+
+        .hero-footer {
+            position: absolute;
+            bottom: 20px;
+            left: 0;
+            right: 0;
+            font-size: 0.7rem;
+            color: var(--text-dim);
+            opacity: 0.5;
+        }
+
+        /* Scanner Page Styles */
+        .scanner-page {
+            display: none;
+        }
+
+        .scanner-page.active {
+            display: block;
+        }
+
+        .hero-page.hidden {
+            display: none;
+        }
+
         .container {
             max-width: 100%;
             padding: 12px;
@@ -37,6 +201,31 @@
             padding: 12px 0;
             border-bottom: 1px solid var(--border);
             margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+        }
+        .back-btn {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            color: var(--text-dim);
+            width: 36px;
+            height: 36px;
+            border-radius: 10px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            transition: all 0.2s;
+        }
+        .back-btn:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+        .header-content {
+            flex: 1;
         }
         h1 {
             font-size: 1.3rem;
@@ -252,48 +441,99 @@
             z-index: 1000;
         }
         .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+
+        @media (max-width: 480px) {
+            .hero-title {
+                font-size: 2rem;
+            }
+            .hero-icon {
+                width: 100px;
+                height: 100px;
+                font-size: 40px;
+            }
+            .begin-btn {
+                padding: 16px 32px;
+                font-size: 1rem;
+            }
+        }
     </style>
 </head>
 <body>
-    <div class="container">
-        <header>
-            <h1>⬡ Multi-QR Detector</h1>
-            <p class="subtitle">Detects multiple grouped QR codes</p>
-        </header>
-
-        <button id="startBtn" class="start-btn">Start Camera</button>
-        <div id="errorBanner" class="error-banner hidden"></div>
-
-        <div id="videoSection" class="hidden">
-            <div class="video-container">
-                <video id="video" playsinline muted></video>
-                <svg id="overlay"></svg>
-            </div>
-
-            <div class="stats-panel">
-                <div class="stat">
-                    <div id="qrCount" class="stat-value zero">0</div>
-                    <div class="stat-label">On Screen</div>
+    <!-- Hero Page -->
+    <div id="heroPage" class="hero-page">
+        <div class="hero-content">
+            <div class="hero-icon">📦</div>
+            <h1 class="hero-title">Welcome to <span>Stock Tracking</span></h1>
+            <p class="hero-subtitle">Scan multiple QR codes simultaneously to track and manage your inventory efficiently</p>
+            
+            <div class="hero-features">
+                <div class="feature-tag">
+                    <span class="icon">📷</span>
+                    Multi-QR Detection
                 </div>
-                <div class="stat">
-                    <div id="fps" class="stat-value zero">0</div>
-                    <div class="stat-label">Scans/s</div>
+                <div class="feature-tag">
+                    <span class="icon">⚡</span>
+                    Real-time Scanning
                 </div>
-                <div class="stat">
-                    <div id="totalScanned" class="stat-value zero">0</div>
-                    <div class="stat-label">Total Found</div>
+                <div class="feature-tag">
+                    <span class="icon">📋</span>
+                    Instant Results
                 </div>
             </div>
 
-            <div class="results">
-                <div class="results-header">
-                    <div class="live-dot"></div>
-                    Detected QR Codes
+            <button id="beginBtn" class="begin-btn">
+                Begin
+                <span class="arrow">→</span>
+            </button>
+        </div>
+        <div class="hero-footer">Stock Tracking System v1.0</div>
+    </div>
+
+    <!-- Scanner Page -->
+    <div id="scannerPage" class="scanner-page">
+        <div class="container">
+            <header>
+                <button id="backBtn" class="back-btn">←</button>
+                <div class="header-content">
+                    <h1>⬡ Stock Scanner</h1>
+                    <p class="subtitle">Scan QR codes to track inventory</p>
                 </div>
-                <div id="qrList" class="qr-list">
-                    <div class="empty-state">
-                        <div class="empty-icon">📷</div>
-                        <div class="empty-text">Point camera at QR codes</div>
+            </header>
+
+            <button id="startBtn" class="start-btn">Start Camera</button>
+            <div id="errorBanner" class="error-banner hidden"></div>
+
+            <div id="videoSection" class="hidden">
+                <div class="video-container">
+                    <video id="video" playsinline muted></video>
+                    <svg id="overlay"></svg>
+                </div>
+
+                <div class="stats-panel">
+                    <div class="stat">
+                        <div id="qrCount" class="stat-value zero">0</div>
+                        <div class="stat-label">On Screen</div>
+                    </div>
+                    <div class="stat">
+                        <div id="fps" class="stat-value zero">0</div>
+                        <div class="stat-label">Scans/s</div>
+                    </div>
+                    <div class="stat">
+                        <div id="totalScanned" class="stat-value zero">0</div>
+                        <div class="stat-label">Total Found</div>
+                    </div>
+                </div>
+
+                <div class="results">
+                    <div class="results-header">
+                        <div class="live-dot"></div>
+                        Scanned Items
+                    </div>
+                    <div id="qrList" class="qr-list">
+                        <div class="empty-state">
+                            <div class="empty-icon">📦</div>
+                            <div class="empty-text">Point camera at QR codes to scan inventory</div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -306,6 +546,35 @@
     <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
     
     <script>
+        // Page Navigation
+        const heroPage = document.getElementById('heroPage');
+        const scannerPage = document.getElementById('scannerPage');
+        const beginBtn = document.getElementById('beginBtn');
+        const backBtn = document.getElementById('backBtn');
+
+        beginBtn.addEventListener('click', () => {
+            heroPage.classList.add('hidden');
+            scannerPage.classList.add('active');
+        });
+
+        backBtn.addEventListener('click', () => {
+            // Stop camera if running
+            if (video.srcObject) {
+                video.srcObject.getTracks().forEach(track => track.stop());
+                video.srcObject = null;
+            }
+            scanning = false;
+            
+            // Reset UI
+            videoSection.classList.add('hidden');
+            startBtn.classList.remove('hidden');
+            
+            // Go back to hero
+            scannerPage.classList.remove('active');
+            heroPage.classList.remove('hidden');
+        });
+
+        // Scanner Logic
         const video = document.getElementById('video');
         const overlay = document.getElementById('overlay');
         const startBtn = document.getElementById('startBtn');
@@ -322,7 +591,7 @@
         let lastTime = performance.now();
         let totalScanned = 0;
         let detectedQRs = new Map();
-        let activeQRs = new Map(); // data -> location
+        let activeQRs = new Map();
         let canvas, ctx;
         let regionCanvas, regionCtx;
 
@@ -353,11 +622,9 @@
                 startBtn.classList.add('hidden');
                 videoSection.classList.remove('hidden');
 
-                // Create main canvas
                 canvas = document.createElement('canvas');
                 ctx = canvas.getContext('2d', { willReadFrequently: true });
                 
-                // Create region canvas for sub-scanning
                 regionCanvas = document.createElement('canvas');
                 regionCtx = regionCanvas.getContext('2d', { willReadFrequently: true });
 
@@ -379,24 +646,21 @@
             }
         }
 
-        // Multi-region scanning for grouped QR codes
         function detectMultipleQRCodes() {
             ctx.drawImage(video, 0, 0);
             const fullImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
             
-            const results = new Map(); // Use map to dedupe by data
+            const results = new Map();
             const w = canvas.width;
             const h = canvas.height;
 
-            // 1. First scan the FULL frame
             const fullResult = jsQR(fullImageData.data, w, h, { inversionAttempts: 'dontInvert' });
             if (fullResult && fullResult.data) {
                 results.set(fullResult.data, fullResult);
             }
 
-            // 2. Scan overlapping grid regions (3x3 grid with overlap)
             const gridSize = 3;
-            const overlap = 0.3; // 30% overlap between regions
+            const overlap = 0.3;
             
             for (let row = 0; row < gridSize; row++) {
                 for (let col = 0; col < gridSize; col++) {
@@ -405,7 +669,6 @@
                     const startX = Math.floor(col * (w - regionW) / (gridSize - 1));
                     const startY = Math.floor(row * (h - regionH) / (gridSize - 1));
                     
-                    // Clamp to bounds
                     const actualW = Math.min(regionW, w - startX);
                     const actualH = Math.min(regionH, h - startY);
                     
@@ -414,7 +677,6 @@
                         const result = jsQR(regionData.data, actualW, actualH, { inversionAttempts: 'dontInvert' });
                         
                         if (result && result.data && !results.has(result.data)) {
-                            // Adjust coordinates back to full frame
                             result.location.topLeftCorner.x += startX;
                             result.location.topLeftCorner.y += startY;
                             result.location.topRightCorner.x += startX;
@@ -429,15 +691,14 @@
                 }
             }
 
-            // 3. Scan quadrants with different sizes
             const quadrants = [
-                { x: 0, y: 0, w: w * 0.55, h: h * 0.55 },           // Top-left
-                { x: w * 0.45, y: 0, w: w * 0.55, h: h * 0.55 },    // Top-right
-                { x: 0, y: h * 0.45, w: w * 0.55, h: h * 0.55 },    // Bottom-left
-                { x: w * 0.45, y: h * 0.45, w: w * 0.55, h: h * 0.55 }, // Bottom-right
-                { x: w * 0.2, y: h * 0.2, w: w * 0.6, h: h * 0.6 }, // Center
-                { x: 0, y: h * 0.25, w: w, h: h * 0.5 },            // Middle horizontal strip
-                { x: w * 0.25, y: 0, w: w * 0.5, h: h },            // Middle vertical strip
+                { x: 0, y: 0, w: w * 0.55, h: h * 0.55 },
+                { x: w * 0.45, y: 0, w: w * 0.55, h: h * 0.55 },
+                { x: 0, y: h * 0.45, w: w * 0.55, h: h * 0.55 },
+                { x: w * 0.45, y: h * 0.45, w: w * 0.55, h: h * 0.55 },
+                { x: w * 0.2, y: h * 0.2, w: w * 0.6, h: h * 0.6 },
+                { x: 0, y: h * 0.25, w: w, h: h * 0.5 },
+                { x: w * 0.25, y: 0, w: w * 0.5, h: h },
             ];
 
             quadrants.forEach(q => {
@@ -464,7 +725,6 @@
                 }
             });
 
-            // 4. Try with enhanced contrast on full image
             if (results.size < 3) {
                 const enhanced = enhanceContrast(fullImageData);
                 const enhancedResult = jsQR(enhanced.data, w, h, { inversionAttempts: 'attemptBoth' });
@@ -479,7 +739,6 @@
         function enhanceContrast(imageData) {
             const data = new Uint8ClampedArray(imageData.data);
             
-            // Find min/max for contrast stretching
             let min = 255, max = 0;
             for (let i = 0; i < data.length; i += 4) {
                 const gray = (data[i] + data[i + 1] + data[i + 2]) / 3;
@@ -514,7 +773,6 @@
             const results = detectMultipleQRCodes();
             const currentActive = new Map();
             
-            // Clear overlay
             overlay.innerHTML = '';
             
             let idx = 1;
@@ -546,18 +804,16 @@
                 });
                 
                 updateQRList();
-                showToast(`QR #${detectedQRs.size} found!`);
+                showToast(`Item #${detectedQRs.size} scanned!`);
             }
         }
 
         function drawOverlay(loc, index) {
             const ns = 'http://www.w3.org/2000/svg';
             
-            // Colors for different QR codes
             const colors = ['#00ffb4', '#ff9f43', '#ff6b9d', '#9d65ff', '#65d9ff', '#ffeb3b'];
             const color = colors[(index - 1) % colors.length];
             
-            // Polygon fill
             const poly = document.createElementNS(ns, 'polygon');
             poly.setAttribute('points', 
                 `${loc.topLeftCorner.x},${loc.topLeftCorner.y} ` +
@@ -571,7 +827,6 @@
             poly.setAttribute('stroke-width', '4');
             overlay.appendChild(poly);
 
-            // Corner circles
             [loc.topLeftCorner, loc.topRightCorner, loc.bottomRightCorner, loc.bottomLeftCorner].forEach(corner => {
                 const circle = document.createElementNS(ns, 'circle');
                 circle.setAttribute('cx', corner.x);
@@ -583,7 +838,6 @@
                 overlay.appendChild(circle);
             });
 
-            // Label
             const labelY = Math.max(30, loc.topLeftCorner.y - 10);
             const rect = document.createElementNS(ns, 'rect');
             rect.setAttribute('x', loc.topLeftCorner.x);
@@ -601,7 +855,7 @@
             text.setAttribute('font-size', '14');
             text.setAttribute('font-weight', 'bold');
             text.setAttribute('font-family', 'JetBrains Mono, monospace');
-            text.textContent = `QR #${index}`;
+            text.textContent = `#${index}`;
             overlay.appendChild(text);
         }
 
@@ -619,7 +873,7 @@
 
         function updateQRList() {
             if (detectedQRs.size === 0) {
-                qrListEl.innerHTML = `<div class="empty-state"><div class="empty-icon">📷</div><div class="empty-text">Point camera at QR codes</div></div>`;
+                qrListEl.innerHTML = `<div class="empty-state"><div class="empty-icon">📦</div><div class="empty-text">Point camera at QR codes to scan inventory</div></div>`;
                 return;
             }
 
@@ -633,7 +887,7 @@
                 
                 item.innerHTML = `
                     <div class="qr-header">
-                        <span class="qr-badge">QR #${qr.index}</span>
+                        <span class="qr-badge">Item #${qr.index}</span>
                         <span class="qr-time">${qr.timestamp}</span>
                     </div>
                     <div class="qr-data">${escapeHtml(qr.data)}</div>

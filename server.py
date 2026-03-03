@@ -1,6 +1,6 @@
 """
-Simple HTTPS server for QR code detector.
-Serves the phone scanner and PC dashboard pages.
+HTTPS server for QR code detector web app.
+Uses a self-signed certificate for camera access on mobile.
 """
 
 import http.server
@@ -9,12 +9,11 @@ import socket
 import os
 import subprocess
 import sys
-import hashlib
-import time
 
 PORT = 8443
 
 def get_local_ip():
+    """Get the local IP address of this machine."""
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         s.connect(("8.8.8.8", 80))
@@ -25,6 +24,7 @@ def get_local_ip():
         return "localhost"
 
 def generate_ssl_cert():
+    """Generate a self-signed SSL certificate."""
     cert_file = "cert.pem"
     key_file = "key.pem"
     
@@ -33,6 +33,8 @@ def generate_ssl_cert():
         return cert_file, key_file
     
     print("Generating self-signed SSL certificate...")
+    
+    # Generate self-signed certificate using openssl
     cmd = [
         "openssl", "req", "-x509", "-newkey", "rsa:2048",
         "-keyout", key_file, "-out", cert_file,
@@ -44,45 +46,51 @@ def generate_ssl_cert():
         subprocess.run(cmd, check=True, capture_output=True)
         print("SSL certificate generated!")
         return cert_file, key_file
-    except Exception as e:
+    except subprocess.CalledProcessError as e:
         print(f"Error generating certificate: {e}")
+        return None, None
+    except FileNotFoundError:
+        print("Error: openssl not found. Please install openssl.")
         return None, None
 
 def main():
     os.chdir(os.path.dirname(os.path.abspath(__file__)))
     
+    # Generate SSL certificate
     cert_file, key_file = generate_ssl_cert()
-    if not cert_file:
-        print("Failed to generate SSL certificate")
+    
+    if not cert_file or not key_file:
+        print("Failed to generate SSL certificate. Exiting.")
         sys.exit(1)
     
     local_ip = get_local_ip()
-    session_id = hashlib.md5(f"{local_ip}{time.time()}".encode()).hexdigest()[:8]
     
     print()
     print("=" * 65)
-    print("  QR CODE DETECTOR - Phone + PC System")
+    print("  QR CODE DETECTOR - HTTPS Server")
     print("=" * 65)
     print()
     print("=" * 65)
-    print("  STEP 1: Open PC Dashboard on this computer")
+    print("  ACCESS URL (use this on your phone):")
     print("=" * 65)
     print()
-    print(f"    https://localhost:{PORT}/pc.html")
+    print(f"    https://{local_ip}:{PORT}")
     print()
     print("=" * 65)
-    print("  STEP 2: Open Phone Scanner on your mobile")
+    print("  IMPORTANT - First time setup:")
     print("=" * 65)
     print()
-    print(f"    https://{local_ip}:{PORT}/phone.html")
+    print("  When you open the URL, you'll see a security warning.")
+    print("  This is normal for self-signed certificates.")
     print()
-    print("=" * 65)
-    print("  SECURITY WARNING")
-    print("=" * 65)
+    print("  On iPhone (Safari):")
+    print("    1. Tap 'Show Details'")
+    print("    2. Tap 'visit this website'")
+    print("    3. Tap 'Visit Website'")
     print()
-    print("  You'll see a security warning (self-signed certificate).")
-    print("  - Chrome: Click 'Advanced' -> 'Proceed to site'")
-    print("  - Safari: Click 'Show Details' -> 'visit this website'")
+    print("  On Android (Chrome):")
+    print("    1. Tap 'Advanced'")
+    print("    2. Tap 'Proceed to [IP] (unsafe)'")
     print()
     print("=" * 65)
     print("  Press Ctrl+C to stop")
@@ -94,11 +102,13 @@ def main():
     try:
         httpd = http.server.HTTPServer(("0.0.0.0", PORT), handler)
         
-        ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-        ssl_context.load_cert_chain(cert_file, key_file)
-        httpd.socket = ssl_context.wrap_socket(httpd.socket, server_side=True)
+        # Wrap with SSL
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        context.load_cert_chain(cert_file, key_file)
+        httpd.socket = context.wrap_socket(httpd.socket, server_side=True)
         
-        print(f"Server running on port {PORT}...")
+        print(f"HTTPS Server running on port {PORT}...")
+        print("Waiting for connections...")
         print()
         httpd.serve_forever()
     except OSError as e:
