@@ -545,11 +545,25 @@
             }
         }
 
+        // Check if two locations are significantly different (different QR codes)
+        function isNewLocation(loc1, loc2, threshold = 50) {
+            const center1X = (loc1.topLeftCorner.x + loc1.bottomRightCorner.x) / 2;
+            const center1Y = (loc1.topLeftCorner.y + loc1.bottomRightCorner.y) / 2;
+            const center2X = (loc2.topLeftCorner.x + loc2.bottomRightCorner.x) / 2;
+            const center2Y = (loc2.topLeftCorner.y + loc2.bottomRightCorner.y) / 2;
+            
+            const distance = Math.sqrt(
+                Math.pow(center1X - center2X, 2) + 
+                Math.pow(center1Y - center2Y, 2)
+            );
+            
+            return distance > threshold;
+        }
+
         // Detect multiple QR codes by scanning and masking
         function detectMultipleQRCodes(originalImageData, width, height) {
             const results = [];
-            const foundData = new Set();
-            const maxQRCodes = 10; // Maximum QR codes to detect
+            const maxQRCodes = 20; // Maximum QR codes to detect
             
             // Create a working copy of the image data
             let workingData = new ImageData(
@@ -565,9 +579,10 @@
                 });
                 
                 if (code && code.data) {
-                    // Check if we already found this QR code (by data content)
-                    if (!foundData.has(code.data)) {
-                        foundData.add(code.data);
+                    // Check if this is a new location (not already detected at same spot)
+                    const isNew = results.every(r => isNewLocation(r.location, code.location));
+                    
+                    if (isNew) {
                         results.push({
                             data: code.data,
                             location: code.location
@@ -611,33 +626,36 @@
                     inversionAttempts: 'attemptBoth'
                 });
                 
-                if (code && code.data && !foundData.has(code.data)) {
-                    foundData.add(code.data);
-                    
+                if (code && code.data) {
                     // Scale location back to full image coordinates
-                    const scaleX = 1;
-                    const scaleY = 1;
-                    results.push({
-                        data: code.data,
-                        location: {
-                            topLeftCorner: {
-                                x: code.location.topLeftCorner.x * scaleX + rx,
-                                y: code.location.topLeftCorner.y * scaleY + ry
-                            },
-                            topRightCorner: {
-                                x: code.location.topRightCorner.x * scaleX + rx,
-                                y: code.location.topRightCorner.y * scaleY + ry
-                            },
-                            bottomRightCorner: {
-                                x: code.location.bottomRightCorner.x * scaleX + rx,
-                                y: code.location.bottomRightCorner.y * scaleY + ry
-                            },
-                            bottomLeftCorner: {
-                                x: code.location.bottomLeftCorner.x * scaleX + rx,
-                                y: code.location.bottomLeftCorner.y * scaleY + ry
-                            }
+                    const adjustedLocation = {
+                        topLeftCorner: {
+                            x: code.location.topLeftCorner.x + rx,
+                            y: code.location.topLeftCorner.y + ry
+                        },
+                        topRightCorner: {
+                            x: code.location.topRightCorner.x + rx,
+                            y: code.location.topRightCorner.y + ry
+                        },
+                        bottomRightCorner: {
+                            x: code.location.bottomRightCorner.x + rx,
+                            y: code.location.bottomRightCorner.y + ry
+                        },
+                        bottomLeftCorner: {
+                            x: code.location.bottomLeftCorner.x + rx,
+                            y: code.location.bottomLeftCorner.y + ry
                         }
-                    });
+                    };
+                    
+                    // Check if this is a new location
+                    const isNew = results.every(r => isNewLocation(r.location, adjustedLocation));
+                    
+                    if (isNew) {
+                        results.push({
+                            data: code.data,
+                            location: adjustedLocation
+                        });
+                    }
                 }
             }
             
@@ -700,8 +718,16 @@
 
                 // Update list active states
                 document.querySelectorAll('.qr-item').forEach(item => {
-                    const data = item.dataset.qrData;
-                    item.classList.toggle('active', activeQRs.has(data));
+                    const posKey = item.dataset.posKey;
+                    // Check if any active QR matches this position
+                    let isActive = false;
+                    activeQRs.forEach((loc, data) => {
+                        const centerX = Math.round((loc.topLeftCorner.x + loc.bottomRightCorner.x) / 2);
+                        const centerY = Math.round((loc.topLeftCorner.y + loc.bottomRightCorner.y) / 2);
+                        const activeKey = `${Math.floor(centerX/50)}_${Math.floor(centerY/50)}_${data.substring(0,20)}`;
+                        if (activeKey === posKey) isActive = true;
+                    });
+                    item.classList.toggle('active', isActive);
                 });
             }
 
@@ -710,17 +736,23 @@
 
         function processQRCode(result, index) {
             const data = result.data;
+            const timestamp = new Date().toLocaleTimeString();
             
-            if (!detectedQRs.has(data)) {
+            // Always add to detected list (no duplicate prevention)
+            // Use a unique key based on position to track individual QR codes
+            const centerX = Math.round((result.location.topLeftCorner.x + result.location.bottomRightCorner.x) / 2);
+            const centerY = Math.round((result.location.topLeftCorner.y + result.location.bottomRightCorner.y) / 2);
+            const posKey = `${Math.floor(centerX/50)}_${Math.floor(centerY/50)}_${data.substring(0,20)}`;
+            
+            if (!detectedQRs.has(posKey)) {
                 totalScanned++;
                 totalScannedEl.textContent = totalScanned;
                 totalScannedEl.classList.remove('zero');
                 
-                const timestamp = new Date().toLocaleTimeString();
-                detectedQRs.set(data, { data, timestamp, index: detectedQRs.size + 1 });
+                detectedQRs.set(posKey, { data, timestamp, index: totalScanned, posKey });
                 
                 updateQRList();
-                showToast('New QR code detected!');
+                showToast(`QR code #${totalScanned} detected!`);
             }
         }
 
@@ -794,8 +826,8 @@
             
             qrArray.forEach((qr, i) => {
                 const item = document.createElement('div');
-                item.className = 'qr-item' + (activeQRs.has(qr.data) ? ' active' : '');
-                item.dataset.qrData = qr.data;
+                item.className = 'qr-item';
+                item.dataset.posKey = qr.posKey;
                 
                 item.innerHTML = `
                     <div class="qr-header">
