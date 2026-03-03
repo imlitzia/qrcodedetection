@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Multi-QR Detector</title>
+    <title>Multi-QR Detector with AI</title>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -13,6 +13,7 @@
             --accent: #00ffb4;
             --accent-dim: #00cc90;
             --accent-orange: #ff9f43;
+            --accent-purple: #9d65ff;
             --text: #e8e8e8;
             --text-dim: #888;
             --warning: #ff6b6b;
@@ -39,16 +40,26 @@
             margin-bottom: 12px;
         }
         h1 {
-            font-size: 1.3rem;
+            font-size: 1.2rem;
             font-weight: 700;
             color: var(--accent);
             letter-spacing: 2px;
             text-transform: uppercase;
         }
         .subtitle {
-            font-size: 0.7rem;
+            font-size: 0.65rem;
             color: var(--text-dim);
             margin-top: 4px;
+        }
+        .ai-badge {
+            display: inline-block;
+            background: var(--accent-purple);
+            color: white;
+            font-size: 0.55rem;
+            padding: 2px 6px;
+            border-radius: 10px;
+            margin-left: 6px;
+            vertical-align: middle;
         }
         
         /* Setup Screen */
@@ -58,66 +69,57 @@
             padding: 20px;
         }
         .setup-title {
-            font-size: 1.1rem;
+            font-size: 1rem;
             color: var(--accent);
             margin-bottom: 20px;
             text-align: center;
         }
         .form-group {
-            margin-bottom: 20px;
+            margin-bottom: 16px;
         }
         .form-label {
             display: block;
-            font-size: 0.75rem;
+            font-size: 0.7rem;
             color: var(--text-dim);
             text-transform: uppercase;
             letter-spacing: 1px;
-            margin-bottom: 8px;
+            margin-bottom: 6px;
         }
         .form-input {
             width: 100%;
-            padding: 14px;
+            padding: 12px;
             background: var(--bg-card);
             border: 1px solid var(--border);
             border-radius: 8px;
             color: var(--text);
             font-family: 'JetBrains Mono', monospace;
-            font-size: 0.9rem;
+            font-size: 0.85rem;
         }
         .form-input:focus {
             outline: none;
             border-color: var(--accent);
         }
-        .form-input::placeholder {
-            color: var(--text-dim);
-        }
         .form-hint {
-            font-size: 0.7rem;
+            font-size: 0.65rem;
             color: var(--text-dim);
-            margin-top: 6px;
+            margin-top: 4px;
         }
         .setup-btn {
             width: 100%;
-            padding: 16px;
+            padding: 14px;
             background: var(--accent);
             color: var(--bg-dark);
             border: none;
             border-radius: 10px;
             font-family: 'JetBrains Mono', monospace;
-            font-size: 1rem;
+            font-size: 0.9rem;
             font-weight: 700;
             cursor: pointer;
             text-transform: uppercase;
             letter-spacing: 2px;
             margin-top: 10px;
         }
-        .setup-btn:disabled {
-            background: var(--border);
-            color: var(--text-dim);
-            cursor: not-allowed;
-        }
         
-        /* Video Container */
         .video-container {
             position: relative;
             width: 100%;
@@ -143,8 +145,8 @@
         .stats-panel {
             display: flex;
             justify-content: space-around;
-            padding: 12px;
-            margin-top: 12px;
+            padding: 10px;
+            margin-top: 10px;
             background: var(--bg-card);
             border-radius: 10px;
             border: 1px solid var(--border);
@@ -155,7 +157,7 @@
         }
         .stat { text-align: center; }
         .stat-value {
-            font-size: 1.8rem;
+            font-size: 1.5rem;
             font-weight: 700;
             color: var(--accent);
             line-height: 1;
@@ -171,53 +173,47 @@
             to { transform: scale(1.1); }
         }
         .stat-label {
-            font-size: 0.6rem;
+            font-size: 0.55rem;
             color: var(--text-dim);
             text-transform: uppercase;
             letter-spacing: 1px;
             margin-top: 4px;
         }
         
-        /* Action Buttons */
-        .action-buttons {
+        /* Category Summary */
+        .category-summary {
             display: flex;
-            gap: 10px;
+            flex-wrap: wrap;
+            gap: 6px;
+            padding: 10px;
+            margin-top: 10px;
+            background: var(--bg-card);
+            border-radius: 10px;
+            border: 1px solid var(--border);
             max-width: 640px;
-            margin: 12px auto;
+            margin-left: auto;
+            margin-right: auto;
             width: 100%;
         }
-        .action-btn {
-            flex: 1;
-            padding: 12px;
-            border: none;
-            border-radius: 8px;
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.75rem;
-            font-weight: 600;
-            cursor: pointer;
-            text-transform: uppercase;
-            letter-spacing: 1px;
+        .category-tag {
             display: flex;
             align-items: center;
-            justify-content: center;
-            gap: 6px;
+            gap: 4px;
+            padding: 4px 10px;
+            border-radius: 15px;
+            font-size: 0.65rem;
+            font-weight: 600;
         }
-        .action-btn-primary {
-            background: var(--accent);
-            color: var(--bg-dark);
-        }
-        .action-btn-secondary {
-            background: var(--border);
-            color: var(--text);
-        }
-        .action-btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
+        .category-tag .count {
+            background: rgba(0,0,0,0.3);
+            padding: 2px 6px;
+            border-radius: 10px;
+            font-size: 0.6rem;
         }
         
         .results {
             flex: 1;
-            margin-top: 12px;
+            margin-top: 10px;
             max-width: 640px;
             margin-left: auto;
             margin-right: auto;
@@ -226,7 +222,7 @@
             overflow-y: auto;
         }
         .results-header {
-            font-size: 0.75rem;
+            font-size: 0.7rem;
             color: var(--text-dim);
             text-transform: uppercase;
             letter-spacing: 2px;
@@ -253,7 +249,7 @@
             background: var(--bg-card);
             border: 1px solid var(--border);
             border-radius: 10px;
-            padding: 12px;
+            padding: 10px;
             animation: slideIn 0.2s ease-out;
             transition: all 0.15s;
         }
@@ -270,36 +266,49 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 8px;
+            margin-bottom: 6px;
+            flex-wrap: wrap;
+            gap: 4px;
         }
         .qr-badge {
             background: var(--accent);
             color: var(--bg-dark);
-            font-size: 0.65rem;
+            font-size: 0.6rem;
             font-weight: 700;
-            padding: 3px 8px;
+            padding: 2px 8px;
             border-radius: 15px;
         }
-        .qr-time { font-size: 0.65rem; color: var(--text-dim); }
+        .qr-category {
+            font-size: 0.6rem;
+            font-weight: 600;
+            padding: 2px 8px;
+            border-radius: 15px;
+        }
+        .qr-category.analyzing {
+            background: var(--border);
+            color: var(--text-dim);
+            animation: pulse 1s infinite;
+        }
+        .qr-time { font-size: 0.6rem; color: var(--text-dim); }
         .qr-data {
-            font-size: 0.8rem;
+            font-size: 0.75rem;
             word-break: break-all;
             color: var(--text);
             line-height: 1.4;
             background: rgba(0, 0, 0, 0.3);
-            padding: 10px;
+            padding: 8px;
             border-radius: 6px;
-            max-height: 50px;
+            max-height: 40px;
             overflow-y: auto;
         }
-        .qr-actions { display: flex; gap: 6px; margin-top: 10px; }
+        .qr-actions { display: flex; gap: 6px; margin-top: 8px; }
         .btn {
             flex: 1;
-            padding: 8px 12px;
+            padding: 6px 10px;
             border: none;
             border-radius: 6px;
             font-family: 'JetBrains Mono', monospace;
-            font-size: 0.7rem;
+            font-size: 0.65rem;
             font-weight: 600;
             cursor: pointer;
             text-transform: uppercase;
@@ -308,21 +317,21 @@
         .btn-secondary { background: var(--border); color: var(--text); }
         .empty-state {
             text-align: center;
-            padding: 30px 15px;
+            padding: 25px 15px;
             color: var(--text-dim);
         }
-        .empty-icon { font-size: 2.5rem; margin-bottom: 12px; opacity: 0.5; }
-        .empty-text { font-size: 0.8rem; line-height: 1.5; }
+        .empty-icon { font-size: 2rem; margin-bottom: 10px; opacity: 0.5; }
+        .empty-text { font-size: 0.75rem; line-height: 1.5; }
         .error-banner {
             background: rgba(255, 107, 107, 0.1);
             border: 1px solid var(--warning);
             color: var(--warning);
-            padding: 12px;
+            padding: 10px;
             border-radius: 10px;
             text-align: center;
-            margin: 12px auto;
+            margin: 10px auto;
             max-width: 640px;
-            font-size: 0.8rem;
+            font-size: 0.75rem;
         }
         .hidden { display: none !important; }
         .toast {
@@ -334,46 +343,41 @@
             color: var(--bg-dark);
             padding: 10px 20px;
             border-radius: 25px;
-            font-size: 0.75rem;
+            font-size: 0.7rem;
             font-weight: 600;
             opacity: 0;
             transition: all 0.3s ease;
             z-index: 1000;
         }
         .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
-        
-        .email-display {
-            text-align: center;
-            font-size: 0.7rem;
-            color: var(--text-dim);
-            margin-bottom: 8px;
-        }
-        .email-display span {
-            color: var(--accent);
-        }
     </style>
 </head>
 <body>
     <div class="container">
         <header>
-            <h1>⬡ Multi-QR Detector</h1>
-            <p class="subtitle">Detects multiple grouped QR codes</p>
+            <h1>⬡ QR Detector <span class="ai-badge">AI</span></h1>
+            <p class="subtitle">Auto-categorizes QR codes with AI</p>
         </header>
 
         <!-- Setup Screen -->
         <div id="setupScreen" class="setup-screen">
-            <div class="setup-title">📧 Setup Email for Results</div>
+            <div class="setup-title">🔑 Enter OpenRouter API Key</div>
             
             <div class="form-group">
-                <label class="form-label">Your Email Address</label>
-                <input type="email" id="emailInput" class="form-input" placeholder="your@email.com">
-                <div class="form-hint">QR code results will be sent to this email</div>
+                <label class="form-label">API Key</label>
+                <input type="password" id="apiKeyInput" class="form-input" placeholder="sk-or-v1-...">
+                <div class="form-hint">Get your key at <a href="https://openrouter.ai/keys" target="_blank" style="color: var(--accent);">openrouter.ai/keys</a></div>
             </div>
             
             <div class="form-group">
-                <label class="form-label">Session Name (Optional)</label>
-                <input type="text" id="sessionName" class="form-input" placeholder="e.g., Inventory Scan March 2026">
-                <div class="form-hint">A name to identify this scanning session</div>
+                <label class="form-label">AI Model (Optional)</label>
+                <select id="modelSelect" class="form-input">
+                    <option value="meta-llama/llama-3.1-8b-instruct:free">Llama 3.1 8B (Free)</option>
+                    <option value="google/gemma-2-9b-it:free">Gemma 2 9B (Free)</option>
+                    <option value="mistralai/mistral-7b-instruct:free">Mistral 7B (Free)</option>
+                    <option value="openai/gpt-4o-mini">GPT-4o Mini (Paid)</option>
+                    <option value="anthropic/claude-3-haiku">Claude 3 Haiku (Paid)</option>
+                </select>
             </div>
             
             <button id="startBtn" class="setup-btn">Start Scanning →</button>
@@ -381,10 +385,7 @@
 
         <div id="errorBanner" class="error-banner hidden"></div>
 
-        <!-- Camera Screen -->
         <div id="videoSection" class="hidden">
-            <div class="email-display">Sending results to: <span id="emailDisplay"></span></div>
-            
             <div class="video-container">
                 <video id="video" playsinline muted></video>
                 <svg id="overlay"></svg>
@@ -401,18 +402,11 @@
                 </div>
                 <div class="stat">
                     <div id="totalScanned" class="stat-value zero">0</div>
-                    <div class="stat-label">Total Found</div>
+                    <div class="stat-label">Total</div>
                 </div>
             </div>
             
-            <div class="action-buttons">
-                <button id="downloadBtn" class="action-btn action-btn-secondary" disabled>
-                    📥 Download CSV
-                </button>
-                <button id="sendEmailBtn" class="action-btn action-btn-primary" disabled>
-                    📧 Send to Email
-                </button>
-            </div>
+            <div id="categorySummary" class="category-summary hidden"></div>
 
             <div class="results">
                 <div class="results-header">
@@ -422,7 +416,7 @@
                 <div id="qrList" class="qr-list">
                     <div class="empty-state">
                         <div class="empty-icon">📷</div>
-                        <div class="empty-text">Point camera at QR codes</div>
+                        <div class="empty-text">Point camera at QR codes<br>AI will categorize them automatically</div>
                     </div>
                 </div>
             </div>
@@ -445,12 +439,10 @@
         const fpsEl = document.getElementById('fps');
         const totalScannedEl = document.getElementById('totalScanned');
         const qrListEl = document.getElementById('qrList');
+        const categorySummary = document.getElementById('categorySummary');
         const toast = document.getElementById('toast');
-        const emailInput = document.getElementById('emailInput');
-        const sessionNameInput = document.getElementById('sessionName');
-        const emailDisplay = document.getElementById('emailDisplay');
-        const downloadBtn = document.getElementById('downloadBtn');
-        const sendEmailBtn = document.getElementById('sendEmailBtn');
+        const apiKeyInput = document.getElementById('apiKeyInput');
+        const modelSelect = document.getElementById('modelSelect');
 
         let scanning = false;
         let scanCount = 0;
@@ -459,8 +451,33 @@
         let detectedQRs = new Map();
         let activeQRs = new Map();
         let canvas, ctx;
-        let userEmail = '';
-        let sessionName = '';
+        let apiKey = '';
+        let aiModel = '';
+        let categoryColors = {};
+        let categoryCounts = {};
+
+        // Category color palette
+        const colorPalette = [
+            { bg: '#ff6b6b', text: '#fff' },  // Red - Food & Beverage
+            { bg: '#4ecdc4', text: '#000' },  // Teal - Technology
+            { bg: '#45b7d1', text: '#000' },  // Blue - Social Media
+            { bg: '#96ceb4', text: '#000' },  // Green - Shopping
+            { bg: '#ffeaa7', text: '#000' },  // Yellow - Entertainment
+            { bg: '#dfe6e9', text: '#000' },  // Gray - Other
+            { bg: '#a29bfe', text: '#000' },  // Purple - Education
+            { bg: '#fd79a8', text: '#000' },  // Pink - Health
+            { bg: '#ffeaa7', text: '#000' },  // Yellow - Finance
+            { bg: '#74b9ff', text: '#000' },  // Light Blue - Travel
+        ];
+        let colorIndex = 0;
+
+        function getColorForCategory(category) {
+            if (!categoryColors[category]) {
+                categoryColors[category] = colorPalette[colorIndex % colorPalette.length];
+                colorIndex++;
+            }
+            return categoryColors[category];
+        }
 
         function showToast(msg) {
             toast.textContent = msg;
@@ -473,88 +490,74 @@
             errorBanner.classList.remove('hidden');
         }
 
-        function validateEmail(email) {
-            return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-        }
+        // Call OpenRouter API to categorize QR content
+        async function categorizeWithAI(qrData) {
+            try {
+                const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${apiKey}`,
+                        'HTTP-Referer': window.location.href,
+                        'X-Title': 'QR Code Detector'
+                    },
+                    body: JSON.stringify({
+                        model: aiModel,
+                        messages: [{
+                            role: 'user',
+                            content: `Categorize this QR code content into ONE category. Reply with ONLY the category name, nothing else.
 
-        function generateCSV() {
-            const rows = [['Index', 'QR Data', 'Type', 'Timestamp']];
-            
-            detectedQRs.forEach((qr, data) => {
-                const type = (data.startsWith('http') || data.startsWith('www.')) ? 'URL' : 'Text';
-                rows.push([qr.index, data, type, qr.timestamp]);
-            });
-            
-            return rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\n');
-        }
+Categories to choose from:
+- Food & Beverage (restaurants, cafes, food delivery, drinks)
+- Technology (IT, electronics, software, hardware, tech companies)
+- Shopping (retail, e-commerce, products, stores)
+- Social Media (social networks, messaging, content platforms)
+- Entertainment (movies, music, games, streaming)
+- Finance (banking, payments, crypto, investments)
+- Travel (airlines, hotels, tourism, transportation)
+- Education (schools, courses, learning, tutorials)
+- Health (medical, fitness, wellness, pharmacy)
+- News & Media (news sites, blogs, magazines)
+- Business (corporate, B2B, professional services)
+- Government (official, public services)
+- Other (if none of the above fit)
 
-        function downloadCSV() {
-            if (detectedQRs.size === 0) {
-                showToast('No QR codes to download');
-                return;
+QR Content: ${qrData}
+
+Reply with ONLY the category name:`
+                        }],
+                        max_tokens: 20,
+                        temperature: 0.1
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`API error: ${response.status}`);
+                }
+
+                const data = await response.json();
+                let category = data.choices[0].message.content.trim();
+                
+                // Clean up the category
+                category = category.replace(/[*"']/g, '').trim();
+                if (category.length > 25) {
+                    category = category.substring(0, 25);
+                }
+                
+                return category || 'Other';
+            } catch (error) {
+                console.error('AI categorization error:', error);
+                return 'Unknown';
             }
-            
-            const csv = generateCSV();
-            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            const filename = sessionName ? 
-                `qr_codes_${sessionName.replace(/[^a-z0-9]/gi, '_')}.csv` : 
-                `qr_codes_${new Date().toISOString().slice(0,10)}.csv`;
-            
-            link.href = url;
-            link.download = filename;
-            link.click();
-            URL.revokeObjectURL(url);
-            
-            showToast('CSV downloaded!');
-        }
-
-        function sendEmail() {
-            if (detectedQRs.size === 0) {
-                showToast('No QR codes to send');
-                return;
-            }
-            
-            const csv = generateCSV();
-            const subject = sessionName ? 
-                `QR Codes - ${sessionName}` : 
-                `QR Codes Scan - ${new Date().toLocaleDateString()}`;
-            
-            // Create email body with summary
-            let body = `QR Code Scan Results\n`;
-            body += `====================\n\n`;
-            body += `Session: ${sessionName || 'Unnamed'}\n`;
-            body += `Date: ${new Date().toLocaleString()}\n`;
-            body += `Total QR Codes: ${detectedQRs.size}\n\n`;
-            body += `QR Codes Found:\n`;
-            body += `--------------\n`;
-            
-            detectedQRs.forEach((qr, data) => {
-                const type = (data.startsWith('http') || data.startsWith('www.')) ? 'URL' : 'Text';
-                body += `\n#${qr.index} [${type}]\n${data}\nScanned at: ${qr.timestamp}\n`;
-            });
-            
-            body += `\n\n--- CSV Data Below ---\n\n`;
-            body += csv;
-            
-            // Use mailto link
-            const mailtoLink = `mailto:${userEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-            
-            // Try to open email client
-            window.location.href = mailtoLink;
-            
-            showToast('Opening email client...');
         }
 
         async function startCamera() {
-            // Validate email
-            userEmail = emailInput.value.trim();
-            sessionName = sessionNameInput.value.trim();
+            apiKey = apiKeyInput.value.trim();
+            aiModel = modelSelect.value;
             
-            if (!validateEmail(userEmail)) {
-                showToast('Please enter a valid email');
-                emailInput.focus();
+            if (!apiKey) {
+                showToast('Please enter your API key');
+                apiKeyInput.focus();
                 return;
             }
             
@@ -572,7 +575,6 @@
 
                 setupScreen.classList.add('hidden');
                 videoSection.classList.remove('hidden');
-                emailDisplay.textContent = userEmail;
 
                 canvas = document.createElement('canvas');
                 ctx = canvas.getContext('2d', { willReadFrequently: true });
@@ -603,13 +605,13 @@
             const w = canvas.width;
             const h = canvas.height;
 
-            // 1. Full frame scan
+            // Full frame scan
             const fullResult = jsQR(fullImageData.data, w, h, { inversionAttempts: 'dontInvert' });
             if (fullResult && fullResult.data) {
                 results.set(fullResult.data, fullResult);
             }
 
-            // 2. Grid scan (3x3 with overlap)
+            // Grid scan (3x3 with overlap)
             const gridSize = 3;
             const overlap = 0.3;
             
@@ -642,15 +644,13 @@
                 }
             }
 
-            // 3. Quadrant scanning
+            // Quadrant scanning
             const quadrants = [
                 { x: 0, y: 0, w: w * 0.55, h: h * 0.55 },
                 { x: w * 0.45, y: 0, w: w * 0.55, h: h * 0.55 },
                 { x: 0, y: h * 0.45, w: w * 0.55, h: h * 0.55 },
                 { x: w * 0.45, y: h * 0.45, w: w * 0.55, h: h * 0.55 },
                 { x: w * 0.2, y: h * 0.2, w: w * 0.6, h: h * 0.6 },
-                { x: 0, y: h * 0.25, w: w, h: h * 0.5 },
-                { x: w * 0.25, y: 0, w: w * 0.5, h: h },
             ];
 
             quadrants.forEach(q => {
@@ -677,37 +677,7 @@
                 }
             });
 
-            // 4. Enhanced contrast scan
-            if (results.size < 3) {
-                const enhanced = enhanceContrast(fullImageData);
-                const enhancedResult = jsQR(enhanced.data, w, h, { inversionAttempts: 'attemptBoth' });
-                if (enhancedResult && enhancedResult.data && !results.has(enhancedResult.data)) {
-                    results.set(enhancedResult.data, enhancedResult);
-                }
-            }
-
             return Array.from(results.values());
-        }
-
-        function enhanceContrast(imageData) {
-            const data = new Uint8ClampedArray(imageData.data);
-            let min = 255, max = 0;
-            
-            for (let i = 0; i < data.length; i += 4) {
-                const gray = (data[i] + data[i + 1] + data[i + 2]) / 3;
-                if (gray < min) min = gray;
-                if (gray > max) max = gray;
-            }
-            
-            const range = max - min || 1;
-            
-            for (let i = 0; i < data.length; i += 4) {
-                const gray = (data[i] + data[i + 1] + data[i + 2]) / 3;
-                const stretched = ((gray - min) / range) * 255;
-                data[i] = data[i + 1] = data[i + 2] = stretched;
-            }
-            
-            return { data, width: imageData.width, height: imageData.height };
         }
 
         function scanLoop() {
@@ -733,39 +703,80 @@
                 if (result && result.data) {
                     currentActive.set(result.data, result.location);
                     processQR(result.data);
-                    drawOverlay(result.location, idx++);
+                    drawOverlay(result.location, idx++, result.data);
                 }
             });
 
             activeQRs = currentActive;
             updateStats(currentActive.size);
             updateListStates();
-            updateButtons();
 
             requestAnimationFrame(scanLoop);
         }
 
-        function processQR(data) {
+        async function processQR(data) {
             if (!detectedQRs.has(data)) {
                 totalScanned++;
                 totalScannedEl.textContent = totalScanned;
                 totalScannedEl.classList.remove('zero');
                 
-                detectedQRs.set(data, {
+                const qrEntry = {
                     data,
                     timestamp: new Date().toLocaleTimeString(),
-                    index: detectedQRs.size + 1
-                });
+                    index: detectedQRs.size + 1,
+                    category: null,
+                    analyzing: true
+                };
+                
+                detectedQRs.set(data, qrEntry);
+                updateQRList();
+                showToast(`QR #${qrEntry.index} found! Analyzing...`);
+                
+                // Categorize with AI
+                const category = await categorizeWithAI(data);
+                qrEntry.category = category;
+                qrEntry.analyzing = false;
+                
+                // Update category counts
+                categoryCounts[category] = (categoryCounts[category] || 0) + 1;
                 
                 updateQRList();
-                showToast(`QR #${detectedQRs.size} found!`);
+                updateCategorySummary();
+                showToast(`QR #${qrEntry.index}: ${category}`);
             }
         }
 
-        function drawOverlay(loc, index) {
+        function updateCategorySummary() {
+            if (Object.keys(categoryCounts).length === 0) {
+                categorySummary.classList.add('hidden');
+                return;
+            }
+            
+            categorySummary.classList.remove('hidden');
+            categorySummary.innerHTML = '';
+            
+            Object.entries(categoryCounts)
+                .sort((a, b) => b[1] - a[1])
+                .forEach(([category, count]) => {
+                    const color = getColorForCategory(category);
+                    const tag = document.createElement('div');
+                    tag.className = 'category-tag';
+                    tag.style.background = color.bg;
+                    tag.style.color = color.text;
+                    tag.innerHTML = `${category} <span class="count">${count}</span>`;
+                    categorySummary.appendChild(tag);
+                });
+        }
+
+        function drawOverlay(loc, index, data) {
             const ns = 'http://www.w3.org/2000/svg';
-            const colors = ['#00ffb4', '#ff9f43', '#ff6b9d', '#9d65ff', '#65d9ff', '#ffeb3b'];
-            const color = colors[(index - 1) % colors.length];
+            const qr = detectedQRs.get(data);
+            
+            let color = '#00ffb4';
+            if (qr && qr.category) {
+                const catColor = getColorForCategory(qr.category);
+                color = catColor.bg;
+            }
             
             const poly = document.createElementNS(ns, 'polygon');
             poly.setAttribute('points', 
@@ -791,10 +802,13 @@
             });
 
             const labelY = Math.max(30, loc.topLeftCorner.y - 10);
+            const labelText = qr && qr.category ? qr.category : `QR #${index}`;
+            const labelWidth = Math.max(65, labelText.length * 8 + 16);
+            
             const rect = document.createElementNS(ns, 'rect');
             rect.setAttribute('x', loc.topLeftCorner.x);
             rect.setAttribute('y', labelY - 26);
-            rect.setAttribute('width', '65');
+            rect.setAttribute('width', labelWidth);
             rect.setAttribute('height', '26');
             rect.setAttribute('rx', '5');
             rect.setAttribute('fill', color);
@@ -804,10 +818,10 @@
             text.setAttribute('x', loc.topLeftCorner.x + 8);
             text.setAttribute('y', labelY - 8);
             text.setAttribute('fill', '#000');
-            text.setAttribute('font-size', '14');
+            text.setAttribute('font-size', '12');
             text.setAttribute('font-weight', 'bold');
             text.setAttribute('font-family', 'JetBrains Mono, monospace');
-            text.textContent = `QR #${index}`;
+            text.textContent = labelText;
             overlay.appendChild(text);
         }
 
@@ -815,12 +829,6 @@
             qrCountEl.textContent = count;
             qrCountEl.classList.toggle('zero', count === 0);
             qrCountEl.classList.toggle('active', count > 0);
-        }
-
-        function updateButtons() {
-            const hasData = detectedQRs.size > 0;
-            downloadBtn.disabled = !hasData;
-            sendEmailBtn.disabled = !hasData;
         }
 
         function updateListStates() {
@@ -831,7 +839,7 @@
 
         function updateQRList() {
             if (detectedQRs.size === 0) {
-                qrListEl.innerHTML = `<div class="empty-state"><div class="empty-icon">📷</div><div class="empty-text">Point camera at QR codes</div></div>`;
+                qrListEl.innerHTML = `<div class="empty-state"><div class="empty-icon">📷</div><div class="empty-text">Point camera at QR codes<br>AI will categorize them</div></div>`;
                 return;
             }
 
@@ -842,10 +850,19 @@
                 item.dataset.qrData = qr.data;
                 
                 const isUrl = qr.data.startsWith('http') || qr.data.startsWith('www.');
+                const color = qr.category ? getColorForCategory(qr.category) : null;
+                
+                let categoryHtml = '';
+                if (qr.analyzing) {
+                    categoryHtml = `<span class="qr-category analyzing">Analyzing...</span>`;
+                } else if (qr.category) {
+                    categoryHtml = `<span class="qr-category" style="background: ${color.bg}; color: ${color.text}">${qr.category}</span>`;
+                }
                 
                 item.innerHTML = `
                     <div class="qr-header">
                         <span class="qr-badge">QR #${qr.index}</span>
+                        ${categoryHtml}
                         <span class="qr-time">${qr.timestamp}</span>
                     </div>
                     <div class="qr-data">${escapeHtml(qr.data)}</div>
@@ -884,15 +901,7 @@
             window.open(u.startsWith('http') ? u : 'https://' + u, '_blank');
         };
 
-        // Event listeners
         startBtn.addEventListener('click', startCamera);
-        downloadBtn.addEventListener('click', downloadCSV);
-        sendEmailBtn.addEventListener('click', sendEmail);
-        
-        // Enable start button only with valid email
-        emailInput.addEventListener('input', () => {
-            startBtn.disabled = !validateEmail(emailInput.value.trim());
-        });
     </script>
 </body>
 </html>
