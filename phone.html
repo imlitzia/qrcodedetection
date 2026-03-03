@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>QR Scanner - Phone</title>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --bg-dark: #0a0a0f;
+            --bg-card: #12121a;
+            --accent: #00ffb4;
+            --accent-orange: #ff9f43;
+            --text: #e8e8e8;
+            --text-dim: #888;
+            --warning: #ff6b6b;
+            --border: #2a2a3a;
+        }
+        body {
+            font-family: 'JetBrains Mono', monospace;
+            background: var(--bg-dark);
+            color: var(--text);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+        .container {
+            padding: 12px;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        header {
+            text-align: center;
+            padding: 10px 0;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 12px;
+        }
+        h1 {
+            font-size: 1.2rem;
+            color: var(--accent);
+            letter-spacing: 2px;
+        }
+        .status {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            margin-top: 6px;
+            font-size: 0.7rem;
+            color: var(--text-dim);
+        }
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--warning);
+        }
+        .status-dot.connected {
+            background: var(--accent);
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .video-container {
+            position: relative;
+            width: 100%;
+            border-radius: 12px;
+            overflow: hidden;
+            background: #000;
+            border: 2px solid var(--border);
+            flex: 1;
+            max-height: 60vh;
+        }
+        video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        #overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+        .stats {
+            display: flex;
+            justify-content: space-around;
+            padding: 12px;
+            margin-top: 12px;
+            background: var(--bg-card);
+            border-radius: 10px;
+            border: 1px solid var(--border);
+        }
+        .stat { text-align: center; }
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--accent);
+        }
+        .stat-value.zero { color: var(--text-dim); }
+        .stat-label {
+            font-size: 0.6rem;
+            color: var(--text-dim);
+            text-transform: uppercase;
+        }
+        .qr-list {
+            margin-top: 12px;
+            flex: 1;
+            overflow-y: auto;
+            max-height: 25vh;
+        }
+        .qr-item {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 10px;
+            margin-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            animation: slideIn 0.2s ease-out;
+        }
+        .qr-item.active {
+            border-color: var(--accent);
+        }
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateX(-10px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+        .qr-info {
+            flex: 1;
+            min-width: 0;
+        }
+        .qr-data {
+            font-size: 0.75rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .qr-category {
+            font-size: 0.65rem;
+            padding: 2px 8px;
+            border-radius: 10px;
+            margin-top: 4px;
+            display: inline-block;
+        }
+        .qr-category.pending {
+            background: var(--border);
+            color: var(--text-dim);
+        }
+        .qr-badge {
+            background: var(--accent);
+            color: var(--bg-dark);
+            font-size: 0.6rem;
+            font-weight: 700;
+            padding: 4px 8px;
+            border-radius: 12px;
+            margin-left: 10px;
+            white-space: nowrap;
+        }
+        .start-btn {
+            width: 100%;
+            padding: 14px;
+            background: var(--accent);
+            color: var(--bg-dark);
+            border: none;
+            border-radius: 10px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 1rem;
+            font-weight: 700;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-top: 12px;
+        }
+        .error {
+            background: rgba(255, 107, 107, 0.1);
+            border: 1px solid var(--warning);
+            color: var(--warning);
+            padding: 12px;
+            border-radius: 10px;
+            text-align: center;
+            font-size: 0.8rem;
+            margin-top: 12px;
+        }
+        .hidden { display: none !important; }
+        .toast {
+            position: fixed;
+            bottom: 15px;
+            left: 50%;
+            transform: translateX(-50%) translateY(100px);
+            background: var(--accent);
+            color: var(--bg-dark);
+            padding: 10px 20px;
+            border-radius: 25px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            opacity: 0;
+            transition: all 0.3s ease;
+            z-index: 1000;
+        }
+        .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📱 QR SCANNER</h1>
+            <div class="status">
+                <div id="statusDot" class="status-dot"></div>
+                <span id="statusText">Connecting to PC...</span>
+            </div>
+        </header>
+
+        <button id="startBtn" class="start-btn">Start Camera</button>
+        <div id="errorBanner" class="error hidden"></div>
+
+        <div id="scannerSection" class="hidden">
+            <div class="video-container">
+                <video id="video" playsinline muted></video>
+                <svg id="overlay"></svg>
+            </div>
+
+            <div class="stats">
+                <div class="stat">
+                    <div id="onScreen" class="stat-value zero">0</div>
+                    <div class="stat-label">On Screen</div>
+                </div>
+                <div class="stat">
+                    <div id="sent" class="stat-value zero">0</div>
+                    <div class="stat-label">Sent to PC</div>
+                </div>
+            </div>
+
+            <div id="qrList" class="qr-list"></div>
+        </div>
+    </div>
+
+    <div id="toast" class="toast"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+    <script>
+        const video = document.getElementById('video');
+        const overlay = document.getElementById('overlay');
+        const startBtn = document.getElementById('startBtn');
+        const scannerSection = document.getElementById('scannerSection');
+        const errorBanner = document.getElementById('errorBanner');
+        const statusDot = document.getElementById('statusDot');
+        const statusText = document.getElementById('statusText');
+        const onScreenEl = document.getElementById('onScreen');
+        const sentEl = document.getElementById('sent');
+        const qrListEl = document.getElementById('qrList');
+        const toast = document.getElementById('toast');
+
+        let ws = null;
+        let sessionId = new URLSearchParams(window.location.search).get('session') || 'default';
+        let scanning = false;
+        let canvas, ctx;
+        let detectedQRs = new Map();
+        let activeQRs = new Set();
+        let sentCount = 0;
+
+        function showToast(msg) {
+            toast.textContent = msg;
+            toast.classList.add('show');
+            setTimeout(() => toast.classList.remove('show'), 1500);
+        }
+
+        function showError(msg) {
+            errorBanner.textContent = msg;
+            errorBanner.classList.remove('hidden');
+        }
+
+        function connectWebSocket() {
+            const wsUrl = `wss://${window.location.hostname}:8444`;
+            
+            try {
+                ws = new WebSocket(wsUrl);
+                
+                ws.onopen = () => {
+                    statusDot.classList.add('connected');
+                    statusText.textContent = 'Connected to PC';
+                    ws.send(JSON.stringify({
+                        type: 'register',
+                        client_type: 'phone',
+                        session_id: sessionId
+                    }));
+                };
+                
+                ws.onclose = () => {
+                    statusDot.classList.remove('connected');
+                    statusText.textContent = 'Disconnected - Reconnecting...';
+                    setTimeout(connectWebSocket, 3000);
+                };
+                
+                ws.onerror = () => {
+                    statusDot.classList.remove('connected');
+                    statusText.textContent = 'Connection error';
+                };
+                
+                ws.onmessage = (event) => {
+                    try {
+                        const data = JSON.parse(event.data);
+                        if (data.type === 'qr_analyzed') {
+                            updateQRCategory(data.qr_data, data.category);
+                        }
+                    } catch (e) {}
+                };
+            } catch (e) {
+                statusText.textContent = 'WebSocket not supported';
+            }
+        }
+
+        function updateQRCategory(qrData, category) {
+            if (detectedQRs.has(qrData)) {
+                detectedQRs.get(qrData).category = category;
+                updateQRList();
+                showToast(`Categorized: ${category}`);
+            }
+        }
+
+        async function startCamera() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
+                });
+                
+                video.srcObject = stream;
+                await video.play();
+
+                startBtn.classList.add('hidden');
+                scannerSection.classList.remove('hidden');
+
+                canvas = document.createElement('canvas');
+                ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+                await new Promise(r => video.videoWidth > 0 ? r() : video.onloadedmetadata = r);
+                
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                overlay.setAttribute('viewBox', `0 0 ${video.videoWidth} ${video.videoHeight}`);
+
+                scanning = true;
+                scanLoop();
+            } catch (err) {
+                showError(`Camera error: ${err.message}`);
+            }
+        }
+
+        function detectQRCodes() {
+            ctx.drawImage(video, 0, 0);
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const results = new Map();
+            const w = canvas.width, h = canvas.height;
+
+            // Full scan
+            const full = jsQR(imageData.data, w, h, { inversionAttempts: 'dontInvert' });
+            if (full?.data) results.set(full.data, full);
+
+            // Grid scan
+            for (let row = 0; row < 3; row++) {
+                for (let col = 0; col < 3; col++) {
+                    const rw = Math.floor(w / 2.1);
+                    const rh = Math.floor(h / 2.1);
+                    const sx = Math.floor(col * (w - rw) / 2);
+                    const sy = Math.floor(row * (h - rh) / 2);
+                    const aw = Math.min(rw, w - sx);
+                    const ah = Math.min(rh, h - sy);
+                    
+                    if (aw > 100 && ah > 100) {
+                        const rd = ctx.getImageData(sx, sy, aw, ah);
+                        const r = jsQR(rd.data, aw, ah, { inversionAttempts: 'dontInvert' });
+                        if (r?.data && !results.has(r.data)) {
+                            r.location.topLeftCorner.x += sx;
+                            r.location.topLeftCorner.y += sy;
+                            r.location.topRightCorner.x += sx;
+                            r.location.topRightCorner.y += sy;
+                            r.location.bottomLeftCorner.x += sx;
+                            r.location.bottomLeftCorner.y += sy;
+                            r.location.bottomRightCorner.x += sx;
+                            r.location.bottomRightCorner.y += sy;
+                            results.set(r.data, r);
+                        }
+                    }
+                }
+            }
+
+            return Array.from(results.values());
+        }
+
+        function scanLoop() {
+            if (!scanning) return;
+
+            const results = detectQRCodes();
+            const current = new Set();
+            
+            overlay.innerHTML = '';
+            
+            results.forEach((r, i) => {
+                if (r?.data) {
+                    current.add(r.data);
+                    
+                    if (!detectedQRs.has(r.data)) {
+                        detectedQRs.set(r.data, {
+                            data: r.data,
+                            index: detectedQRs.size + 1,
+                            category: null
+                        });
+                        
+                        // Send to PC
+                        if (ws?.readyState === WebSocket.OPEN) {
+                            ws.send(JSON.stringify({
+                                type: 'qr_detected',
+                                qr_data: r.data
+                            }));
+                            sentCount++;
+                            sentEl.textContent = sentCount;
+                            sentEl.classList.remove('zero');
+                        }
+                        
+                        updateQRList();
+                        showToast(`QR #${detectedQRs.size} sent to PC`);
+                    }
+                    
+                    drawOverlay(r.location, detectedQRs.get(r.data).index);
+                }
+            });
+
+            activeQRs = current;
+            onScreenEl.textContent = current.size;
+            onScreenEl.classList.toggle('zero', current.size === 0);
+
+            requestAnimationFrame(scanLoop);
+        }
+
+        function drawOverlay(loc, index) {
+            const ns = 'http://www.w3.org/2000/svg';
+            const colors = ['#00ffb4', '#ff9f43', '#ff6b9d', '#9d65ff', '#65d9ff'];
+            const color = colors[(index - 1) % colors.length];
+            
+            const poly = document.createElementNS(ns, 'polygon');
+            poly.setAttribute('points', 
+                `${loc.topLeftCorner.x},${loc.topLeftCorner.y} ` +
+                `${loc.topRightCorner.x},${loc.topRightCorner.y} ` +
+                `${loc.bottomRightCorner.x},${loc.bottomRightCorner.y} ` +
+                `${loc.bottomLeftCorner.x},${loc.bottomLeftCorner.y}`
+            );
+            poly.style.fill = `${color}30`;
+            poly.setAttribute('stroke', color);
+            poly.setAttribute('stroke-width', '3');
+            overlay.appendChild(poly);
+
+            const rect = document.createElementNS(ns, 'rect');
+            rect.setAttribute('x', loc.topLeftCorner.x);
+            rect.setAttribute('y', Math.max(20, loc.topLeftCorner.y - 25));
+            rect.setAttribute('width', '50');
+            rect.setAttribute('height', '22');
+            rect.setAttribute('rx', '4');
+            rect.setAttribute('fill', color);
+            overlay.appendChild(rect);
+
+            const text = document.createElementNS(ns, 'text');
+            text.setAttribute('x', loc.topLeftCorner.x + 6);
+            text.setAttribute('y', Math.max(20, loc.topLeftCorner.y - 25) + 16);
+            text.setAttribute('fill', '#000');
+            text.setAttribute('font-size', '12');
+            text.setAttribute('font-weight', 'bold');
+            text.textContent = `#${index}`;
+            overlay.appendChild(text);
+        }
+
+        function updateQRList() {
+            qrListEl.innerHTML = '';
+            Array.from(detectedQRs.values()).reverse().forEach(qr => {
+                const item = document.createElement('div');
+                item.className = 'qr-item' + (activeQRs.has(qr.data) ? ' active' : '');
+                
+                const catClass = qr.category ? '' : 'pending';
+                const catText = qr.category || 'Analyzing...';
+                
+                item.innerHTML = `
+                    <div class="qr-info">
+                        <div class="qr-data">${escapeHtml(qr.data)}</div>
+                        <span class="qr-category ${catClass}">${catText}</span>
+                    </div>
+                    <span class="qr-badge">#${qr.index}</span>
+                `;
+                qrListEl.appendChild(item);
+            });
+        }
+
+        function escapeHtml(t) {
+            const d = document.createElement('div');
+            d.textContent = t;
+            return d.innerHTML;
+        }
+
+        connectWebSocket();
+        startBtn.addEventListener('click', startCamera);
+    </script>
+</body>
+</html>
