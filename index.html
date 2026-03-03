@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>QR Code Detector</title>
+    <script src="https://unpkg.com/@aspect-ratio/core"></script>
     <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
@@ -87,10 +88,6 @@
             width: 100%;
             height: 100%;
             pointer-events: none;
-        }
-
-        #processingCanvas {
-            display: none;
         }
 
         .scan-overlay {
@@ -353,6 +350,7 @@
             display: none !important;
         }
 
+        /* Toast notification */
         .toast {
             position: fixed;
             bottom: 20px;
@@ -404,7 +402,6 @@
             <div class="video-container">
                 <video id="video" playsinline></video>
                 <canvas id="canvas"></canvas>
-                <canvas id="processingCanvas"></canvas>
                 <div class="scan-overlay">
                     <div class="scan-line"></div>
                     <div class="corner corner-tl"></div>
@@ -449,9 +446,7 @@
     <script>
         const video = document.getElementById('video');
         const canvas = document.getElementById('canvas');
-        const processingCanvas = document.getElementById('processingCanvas');
         const ctx = canvas.getContext('2d', { willReadFrequently: true });
-        const procCtx = processingCanvas.getContext('2d', { willReadFrequently: true });
         const startBtn = document.getElementById('startBtn');
         const videoSection = document.getElementById('videoSection');
         const errorBanner = document.getElementById('errorBanner');
@@ -466,11 +461,7 @@
         let lastTime = performance.now();
         let totalScanned = 0;
         let detectedQRs = new Map();
-        let activeQRs = [];  // Array to store all currently visible QR codes
-        let cachedResults = [];
-        let cacheTimeout = 0;
-        let scanCounter = 0;  // Counter to skip frames for performance
-        const SCAN_EVERY_N_FRAMES = 5;  // Only scan every 5th frame (for 60fps camera)
+        let activeQRs = new Set();
 
         function showToast(message) {
             toast.textContent = message;
@@ -488,9 +479,8 @@
                 const constraints = {
                     video: {
                         facingMode: 'environment',
-                        width: { ideal: 1280, min: 640 },
-                        height: { ideal: 720, min: 480 },
-                        frameRate: { ideal: 60, min: 30 }
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
                     }
                 };
 
@@ -503,8 +493,6 @@
 
                 canvas.width = video.videoWidth;
                 canvas.height = video.videoHeight;
-                processingCanvas.width = video.videoWidth;
-                processingCanvas.height = video.videoHeight;
 
                 scanning = true;
                 requestAnimationFrame(scanFrame);
@@ -514,250 +502,10 @@
             }
         }
 
-        // Mask out a detected QR code region by filling it with gray
-        function maskQRRegion(imageData, location, padding = 20) {
-            const width = imageData.width;
-            const data = imageData.data;
-            
-            // Get bounding box with padding
-            const minX = Math.max(0, Math.floor(Math.min(
-                location.topLeftCorner.x,
-                location.bottomLeftCorner.x
-            )) - padding);
-            const maxX = Math.min(width, Math.ceil(Math.max(
-                location.topRightCorner.x,
-                location.bottomRightCorner.x
-            )) + padding);
-            const minY = Math.max(0, Math.floor(Math.min(
-                location.topLeftCorner.y,
-                location.topRightCorner.y
-            )) - padding);
-            const maxY = Math.min(imageData.height, Math.ceil(Math.max(
-                location.bottomLeftCorner.y,
-                location.bottomRightCorner.y
-            )) + padding);
-            
-            // Fill the region with gray (neutral color that won't be detected as QR)
-            for (let y = minY; y < maxY; y++) {
-                for (let x = minX; x < maxX; x++) {
-                    const idx = (y * width + x) * 4;
-                    data[idx] = 128;     // R
-                    data[idx + 1] = 128; // G
-                    data[idx + 2] = 128; // B
-                }
-            }
-        }
-
-        // Check if two locations are significantly different (different QR codes)
-        function isNewLocation(loc1, loc2, threshold = 50) {
-            const center1X = (loc1.topLeftCorner.x + loc1.bottomRightCorner.x) / 2;
-            const center1Y = (loc1.topLeftCorner.y + loc1.bottomRightCorner.y) / 2;
-            const center2X = (loc2.topLeftCorner.x + loc2.bottomRightCorner.x) / 2;
-            const center2Y = (loc2.topLeftCorner.y + loc2.bottomRightCorner.y) / 2;
-            
-            const distance = Math.sqrt(
-                Math.pow(center1X - center2X, 2) + 
-                Math.pow(center1Y - center2Y, 2)
-            );
-            
-            return distance > threshold;
-        }
-
-        // Enhance image for better QR detection
-        function enhanceImageData(imageData) {
-            const data = imageData.data;
-            const len = data.length;
-            
-            // Calculate histogram for adaptive enhancement
-            let minVal = 255, maxVal = 0;
-            for (let i = 0; i < len; i += 4) {
-                const gray = data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114;
-                if (gray < minVal) minVal = gray;
-                if (gray > maxVal) maxVal = gray;
-            }
-            
-            // Apply contrast stretching and sharpening
-            const range = maxVal - minVal || 1;
-            for (let i = 0; i < len; i += 4) {
-                // Convert to grayscale
-                let gray = data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114;
-                
-                // Contrast stretch
-                gray = ((gray - minVal) / range) * 255;
-                
-                // Increase contrast
-                gray = ((gray - 128) * 1.3) + 128;
-                gray = Math.max(0, Math.min(255, gray));
-                
-                data[i] = gray;
-                data[i + 1] = gray;
-                data[i + 2] = gray;
-            }
-            
-            return imageData;
-        }
-
-        // Binarize image for QR detection
-        function binarizeImageData(imageData) {
-            const data = imageData.data;
-            const len = data.length;
-            
-            // Calculate average brightness
-            let sum = 0;
-            for (let i = 0; i < len; i += 4) {
-                sum += data[i];
-            }
-            const avg = sum / (len / 4);
-            const threshold = avg * 0.85; // Slightly below average
-            
-            for (let i = 0; i < len; i += 4) {
-                const val = data[i] > threshold ? 255 : 0;
-                data[i] = val;
-                data[i + 1] = val;
-                data[i + 2] = val;
-            }
-            
-            return imageData;
-        }
-
-        // Detect multiple QR codes by scanning and masking
-        function detectMultipleQRCodes(originalImageData, width, height) {
-            const results = [];
-            const maxQRCodes = 20;
-            
-            // Create working copies
-            let workingData = new ImageData(
-                new Uint8ClampedArray(originalImageData.data),
-                width,
-                height
-            );
-            
-            // Pass 1: Scan original image
-            for (let i = 0; i < maxQRCodes; i++) {
-                const code = jsQR(workingData.data, width, height, {
-                    inversionAttempts: 'attemptBoth'
-                });
-                
-                if (code && code.data) {
-                    const isNew = results.every(r => isNewLocation(r.location, code.location));
-                    if (isNew) {
-                        results.push({ data: code.data, location: code.location });
-                    }
-                    maskQRRegion(workingData, code.location, 30);
-                } else {
-                    break;
-                }
-            }
-            
-            // Pass 2: Try with enhanced contrast
-            if (results.length < maxQRCodes) {
-                let enhancedData = new ImageData(
-                    new Uint8ClampedArray(originalImageData.data),
-                    width,
-                    height
-                );
-                enhanceImageData(enhancedData);
-                
-                for (let i = 0; i < 5; i++) {
-                    const code = jsQR(enhancedData.data, width, height, {
-                        inversionAttempts: 'attemptBoth'
-                    });
-                    
-                    if (code && code.data) {
-                        const isNew = results.every(r => isNewLocation(r.location, code.location));
-                        if (isNew) {
-                            results.push({ data: code.data, location: code.location });
-                        }
-                        maskQRRegion(enhancedData, code.location, 30);
-                    } else {
-                        break;
-                    }
-                }
-            }
-            
-            // Pass 3: Try with binarization for difficult QR codes
-            if (results.length < maxQRCodes) {
-                let binaryData = new ImageData(
-                    new Uint8ClampedArray(originalImageData.data),
-                    width,
-                    height
-                );
-                enhanceImageData(binaryData);
-                binarizeImageData(binaryData);
-                
-                for (let i = 0; i < 5; i++) {
-                    const code = jsQR(binaryData.data, width, height, {
-                        inversionAttempts: 'attemptBoth'
-                    });
-                    
-                    if (code && code.data) {
-                        const isNew = results.every(r => isNewLocation(r.location, code.location));
-                        if (isNew) {
-                            results.push({ data: code.data, location: code.location });
-                        }
-                        maskQRRegion(binaryData, code.location, 30);
-                    } else {
-                        break;
-                    }
-                }
-            }
-            
-            // Pass 4: Scan quadrants for QR codes that might be missed
-            const regions = [
-                { x: 0, y: 0, w: 0.55, h: 0.55 },
-                { x: 0.45, y: 0, w: 0.55, h: 0.55 },
-                { x: 0, y: 0.45, w: 0.55, h: 0.55 },
-                { x: 0.45, y: 0.45, w: 0.55, h: 0.55 },
-                { x: 0.2, y: 0.2, w: 0.6, h: 0.6 },  // Center region
-            ];
-            
-            for (const region of regions) {
-                if (results.length >= maxQRCodes) break;
-                
-                const rx = Math.floor(region.x * width);
-                const ry = Math.floor(region.y * height);
-                const rw = Math.floor(region.w * width);
-                const rh = Math.floor(region.h * height);
-                
-                procCtx.drawImage(video, rx, ry, rw, rh, 0, 0, rw, rh);
-                const regionData = procCtx.getImageData(0, 0, rw, rh);
-                
-                // Try original
-                let code = jsQR(regionData.data, rw, rh, {
-                    inversionAttempts: 'attemptBoth'
-                });
-                
-                // Try enhanced if original fails
-                if (!code) {
-                    enhanceImageData(regionData);
-                    code = jsQR(regionData.data, rw, rh, {
-                        inversionAttempts: 'attemptBoth'
-                    });
-                }
-                
-                if (code && code.data) {
-                    const adjustedLocation = {
-                        topLeftCorner: { x: code.location.topLeftCorner.x + rx, y: code.location.topLeftCorner.y + ry },
-                        topRightCorner: { x: code.location.topRightCorner.x + rx, y: code.location.topRightCorner.y + ry },
-                        bottomRightCorner: { x: code.location.bottomRightCorner.x + rx, y: code.location.bottomRightCorner.y + ry },
-                        bottomLeftCorner: { x: code.location.bottomLeftCorner.x + rx, y: code.location.bottomLeftCorner.y + ry }
-                    };
-                    
-                    const isNew = results.every(r => isNewLocation(r.location, adjustedLocation));
-                    if (isNew) {
-                        results.push({ data: code.data, location: adjustedLocation });
-                    }
-                }
-            }
-            
-            return results;
-        }
-
         function scanFrame() {
             if (!scanning) return;
 
             frameCount++;
-            scanCounter++;
             const now = performance.now();
             if (now - lastTime >= 1000) {
                 fpsEl.textContent = frameCount;
@@ -767,100 +515,66 @@
             }
 
             if (video.readyState === video.HAVE_ENOUGH_DATA) {
-                // Always draw video for smooth display
                 ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
                 
-                // Only run QR detection every N frames for performance
-                if (scanCounter >= SCAN_EVERY_N_FRAMES) {
-                    scanCounter = 0;
-                    
-                    // Get image data for processing
-                    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                    
-                    // Detect multiple QR codes
-                    const detectedCodes = detectMultipleQRCodes(imageData, canvas.width, canvas.height);
-                    
-                    // Update cache
-                    if (detectedCodes.length > 0) {
-                        cachedResults = detectedCodes;
-                        cacheTimeout = 15;  // Keep results longer
-                    } else if (cacheTimeout > 0) {
-                        cacheTimeout--;
-                    } else {
-                        cachedResults = [];
-                    }
-                }
+                // Clear previous drawings
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+                // Scan for QR codes using jsQR
+                const currentFrameQRs = new Set();
                 
-                const resultsToShow = cachedResults;
-                
-                // Process and draw detected QR codes (always draw from cache)
-                const currentFrameQRs = [];
-                
-                resultsToShow.forEach((result, index) => {
-                    processQRCode(result, index + 1);
-                    currentFrameQRs.push({
-                        data: result.data,
-                        location: result.location,
-                        index: index + 1
-                    });
-                    drawQROverlay(result, index + 1);
+                // Try to detect QR code
+                const code = jsQR(imageData.data, imageData.width, imageData.height, {
+                    inversionAttempts: 'dontInvert'
                 });
 
+                if (code) {
+                    processQRCode(code, 1);
+                    currentFrameQRs.add(code.data);
+                    drawQROverlay(code, 1);
+                }
+
+                // Update active QRs
                 activeQRs = currentFrameQRs;
                 
-                // Update count display - show actual number of QR codes detected
-                const count = currentFrameQRs.length;
+                // Update count display
+                const count = currentFrameQRs.size;
                 qrCountEl.textContent = count;
                 qrCountEl.classList.toggle('zero', count === 0);
 
-                // Update list active states (only every few frames to reduce DOM updates)
-                if (scanCounter === 0) {
-                    document.querySelectorAll('.qr-item').forEach(item => {
-                        const qrData = item.dataset.qrData;
-                        // Check if this QR code is currently visible in camera
-                        const isActive = activeQRs.some(qr => qr.data === qrData);
-                        item.classList.toggle('active', isActive);
-                    });
-                }
+                // Update list active states
+                document.querySelectorAll('.qr-item').forEach(item => {
+                    const data = item.dataset.qrData;
+                    item.classList.toggle('active', activeQRs.has(data));
+                });
             }
 
             requestAnimationFrame(scanFrame);
         }
 
-        function processQRCode(result, index) {
-            const data = result.data;
-            const timestamp = new Date().toLocaleTimeString();
+        function processQRCode(code, index) {
+            const data = code.data;
             
-            // Only add if this QR code DATA hasn't been scanned before (no duplicates by content)
             if (!detectedQRs.has(data)) {
                 totalScanned++;
                 totalScannedEl.textContent = totalScanned;
                 totalScannedEl.classList.remove('zero');
                 
-                detectedQRs.set(data, { data, timestamp, index: totalScanned });
+                const timestamp = new Date().toLocaleTimeString();
+                detectedQRs.set(data, { data, timestamp, index: detectedQRs.size + 1 });
                 
                 updateQRList();
-                showToast(`QR code #${totalScanned} detected!`);
+                showToast('New QR code detected!');
             }
-            // Note: The overlay will still be drawn for all visible QR codes
-            // regardless of whether they've been scanned before
         }
 
-        function drawQROverlay(result, index) {
-            const loc = result.location;
-            
-            // Colors for different QR codes
-            const colors = [
-                { fill: 'rgba(0, 255, 180, 0.25)', stroke: '#00ffb4', corner: '#00c8ff' },
-                { fill: 'rgba(255, 180, 0, 0.25)', stroke: '#ffb400', corner: '#ff8800' },
-                { fill: 'rgba(180, 0, 255, 0.25)', stroke: '#b400ff', corner: '#8800ff' },
-                { fill: 'rgba(0, 180, 255, 0.25)', stroke: '#00b4ff', corner: '#0088ff' },
-                { fill: 'rgba(255, 0, 180, 0.25)', stroke: '#ff00b4', corner: '#ff0088' },
-            ];
-            const color = colors[(index - 1) % colors.length];
+        function drawQROverlay(code, index) {
+            const loc = code.location;
             
             // Draw filled polygon
-            ctx.fillStyle = color.fill;
+            ctx.fillStyle = 'rgba(0, 255, 180, 0.2)';
             ctx.beginPath();
             ctx.moveTo(loc.topLeftCorner.x, loc.topLeftCorner.y);
             ctx.lineTo(loc.topRightCorner.x, loc.topRightCorner.y);
@@ -870,31 +584,28 @@
             ctx.fill();
 
             // Draw border
-            ctx.strokeStyle = color.stroke;
+            ctx.strokeStyle = '#00ffb4';
             ctx.lineWidth = 4;
             ctx.stroke();
 
             // Draw corners
             const corners = [loc.topLeftCorner, loc.topRightCorner, loc.bottomRightCorner, loc.bottomLeftCorner];
             corners.forEach(corner => {
-                ctx.fillStyle = color.corner;
+                ctx.fillStyle = '#00c8ff';
                 ctx.beginPath();
-                ctx.arc(corner.x, corner.y, 10, 0, Math.PI * 2);
+                ctx.arc(corner.x, corner.y, 8, 0, Math.PI * 2);
                 ctx.fill();
-                ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+                ctx.strokeStyle = '#008faa';
                 ctx.lineWidth = 2;
                 ctx.stroke();
             });
 
             // Draw label
-            const labelX = Math.min(loc.topLeftCorner.x, loc.bottomLeftCorner.x);
-            const labelY = Math.min(loc.topLeftCorner.y, loc.topRightCorner.y) - 10;
-            
-            ctx.fillStyle = color.stroke;
-            ctx.fillRect(labelX, labelY - 30, 90, 35);
-            ctx.fillStyle = '#000';
-            ctx.font = 'bold 18px JetBrains Mono, monospace';
-            ctx.fillText(`QR #${index}`, labelX + 10, labelY - 5);
+            ctx.fillStyle = '#00ffb4';
+            ctx.fillRect(loc.topLeftCorner.x, loc.topLeftCorner.y - 35, 80, 30);
+            ctx.fillStyle = '#0a0a0f';
+            ctx.font = 'bold 16px JetBrains Mono, monospace';
+            ctx.fillText(`QR #${index}`, loc.topLeftCorner.x + 10, loc.topLeftCorner.y - 12);
         }
 
         function updateQRList() {
@@ -916,9 +627,7 @@
             
             qrArray.forEach((qr, i) => {
                 const item = document.createElement('div');
-                // Check if currently visible
-                const isActive = activeQRs.some(aqr => aqr.data === qr.data);
-                item.className = 'qr-item' + (isActive ? ' active' : '');
+                item.className = 'qr-item' + (activeQRs.has(qr.data) ? ' active' : '');
                 item.dataset.qrData = qr.data;
                 
                 item.innerHTML = `
