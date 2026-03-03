@@ -601,16 +601,12 @@
             }
             
             // Also try scanning different regions/quadrants for QR codes that might be missed
+            // Reduced to 4 regions for better performance
             const regions = [
                 { x: 0, y: 0, w: 0.55, h: 0.55 },           // Top-left
                 { x: 0.45, y: 0, w: 0.55, h: 0.55 },        // Top-right
                 { x: 0, y: 0.45, w: 0.55, h: 0.55 },        // Bottom-left
                 { x: 0.45, y: 0.45, w: 0.55, h: 0.55 },     // Bottom-right
-                { x: 0.25, y: 0.25, w: 0.5, h: 0.5 },       // Center
-                { x: 0, y: 0.25, w: 0.5, h: 0.5 },          // Left
-                { x: 0.5, y: 0.25, w: 0.5, h: 0.5 },        // Right
-                { x: 0.25, y: 0, w: 0.5, h: 0.5 },          // Top
-                { x: 0.25, y: 0.5, w: 0.5, h: 0.5 },        // Bottom
             ];
             
             for (const region of regions) {
@@ -669,6 +665,7 @@
             if (!scanning) return;
 
             frameCount++;
+            scanCounter++;
             const now = performance.now();
             if (now - lastTime >= 1000) {
                 fpsEl.textContent = frameCount;
@@ -678,32 +675,33 @@
             }
 
             if (video.readyState === video.HAVE_ENOUGH_DATA) {
-                // Draw video to canvas
+                // Always draw video for smooth display
                 ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
                 
-                // Get image data for processing
-                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                
-                // Detect multiple QR codes
-                const detectedCodes = detectMultipleQRCodes(imageData, canvas.width, canvas.height);
-                
-                // Update cache
-                if (detectedCodes.length > 0) {
-                    cachedResults = detectedCodes;
-                    cacheTimeout = 8;
-                } else if (cacheTimeout > 0) {
-                    cacheTimeout--;
-                } else {
-                    cachedResults = [];
+                // Only run QR detection every N frames for performance
+                if (scanCounter >= SCAN_EVERY_N_FRAMES) {
+                    scanCounter = 0;
+                    
+                    // Get image data for processing
+                    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                    
+                    // Detect multiple QR codes
+                    const detectedCodes = detectMultipleQRCodes(imageData, canvas.width, canvas.height);
+                    
+                    // Update cache
+                    if (detectedCodes.length > 0) {
+                        cachedResults = detectedCodes;
+                        cacheTimeout = 15;  // Keep results longer
+                    } else if (cacheTimeout > 0) {
+                        cacheTimeout--;
+                    } else {
+                        cachedResults = [];
+                    }
                 }
                 
                 const resultsToShow = cachedResults;
                 
-                // Clear and redraw video
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
-                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                
-                // Process and draw detected QR codes
+                // Process and draw detected QR codes (always draw from cache)
                 const currentFrameQRs = [];
                 
                 resultsToShow.forEach((result, index) => {
@@ -723,19 +721,15 @@
                 qrCountEl.textContent = count;
                 qrCountEl.classList.toggle('zero', count === 0);
 
-                // Update list active states
-                document.querySelectorAll('.qr-item').forEach(item => {
-                    const posKey = item.dataset.posKey;
-                    // Check if any active QR matches this position
-                    let isActive = false;
-                    activeQRs.forEach(qr => {
-                        const centerX = Math.round((qr.location.topLeftCorner.x + qr.location.bottomRightCorner.x) / 2);
-                        const centerY = Math.round((qr.location.topLeftCorner.y + qr.location.bottomRightCorner.y) / 2);
-                        const activeKey = `${Math.floor(centerX/50)}_${Math.floor(centerY/50)}_${qr.data.substring(0,20)}`;
-                        if (activeKey === posKey) isActive = true;
+                // Update list active states (only every few frames to reduce DOM updates)
+                if (scanCounter === 0) {
+                    document.querySelectorAll('.qr-item').forEach(item => {
+                        const qrData = item.dataset.qrData;
+                        // Check if this QR code is currently visible in camera
+                        const isActive = activeQRs.some(qr => qr.data === qrData);
+                        item.classList.toggle('active', isActive);
                     });
-                    item.classList.toggle('active', isActive);
-                });
+                }
             }
 
             requestAnimationFrame(scanFrame);
@@ -745,22 +739,19 @@
             const data = result.data;
             const timestamp = new Date().toLocaleTimeString();
             
-            // Always add to detected list (no duplicate prevention)
-            // Use a unique key based on position to track individual QR codes
-            const centerX = Math.round((result.location.topLeftCorner.x + result.location.bottomRightCorner.x) / 2);
-            const centerY = Math.round((result.location.topLeftCorner.y + result.location.bottomRightCorner.y) / 2);
-            const posKey = `${Math.floor(centerX/50)}_${Math.floor(centerY/50)}_${data.substring(0,20)}`;
-            
-            if (!detectedQRs.has(posKey)) {
+            // Only add if this QR code DATA hasn't been scanned before (no duplicates by content)
+            if (!detectedQRs.has(data)) {
                 totalScanned++;
                 totalScannedEl.textContent = totalScanned;
                 totalScannedEl.classList.remove('zero');
                 
-                detectedQRs.set(posKey, { data, timestamp, index: totalScanned, posKey });
+                detectedQRs.set(data, { data, timestamp, index: totalScanned });
                 
                 updateQRList();
                 showToast(`QR code #${totalScanned} detected!`);
             }
+            // Note: The overlay will still be drawn for all visible QR codes
+            // regardless of whether they've been scanned before
         }
 
         function drawQROverlay(result, index) {
@@ -833,8 +824,10 @@
             
             qrArray.forEach((qr, i) => {
                 const item = document.createElement('div');
-                item.className = 'qr-item';
-                item.dataset.posKey = qr.posKey;
+                // Check if currently visible
+                const isActive = activeQRs.some(aqr => aqr.data === qr.data);
+                item.className = 'qr-item' + (isActive ? ' active' : '');
+                item.dataset.qrData = qr.data;
                 
                 item.innerHTML = `
                     <div class="qr-header">
