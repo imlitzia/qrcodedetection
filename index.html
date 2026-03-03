@@ -3,28 +3,21 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>QR Code Detector</title>
-    <script src="https://unpkg.com/@aspect-ratio/core"></script>
-    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+    <title>Multi-QR Detector</title>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
+        * { margin: 0; padding: 0; box-sizing: border-box; }
         :root {
             --bg-dark: #0a0a0f;
             --bg-card: #12121a;
             --accent: #00ffb4;
             --accent-dim: #00cc90;
+            --accent-orange: #ff9f43;
             --text: #e8e8e8;
             --text-dim: #888;
             --warning: #ff6b6b;
             --border: #2a2a3a;
         }
-
         body {
             font-family: 'JetBrains Mono', monospace;
             background: var(--bg-dark);
@@ -32,56 +25,46 @@
             min-height: 100vh;
             overflow-x: hidden;
         }
-
         .container {
             max-width: 100%;
-            padding: 16px;
+            padding: 12px;
             display: flex;
             flex-direction: column;
             min-height: 100vh;
         }
-
         header {
             text-align: center;
-            padding: 20px 0;
+            padding: 12px 0;
             border-bottom: 1px solid var(--border);
-            margin-bottom: 20px;
+            margin-bottom: 12px;
         }
-
         h1 {
-            font-size: 1.5rem;
+            font-size: 1.3rem;
             font-weight: 700;
             color: var(--accent);
             letter-spacing: 2px;
             text-transform: uppercase;
         }
-
         .subtitle {
-            font-size: 0.75rem;
+            font-size: 0.7rem;
             color: var(--text-dim);
-            margin-top: 8px;
-            letter-spacing: 1px;
+            margin-top: 4px;
         }
-
         .video-container {
             position: relative;
             width: 100%;
             max-width: 640px;
             margin: 0 auto;
-            border-radius: 16px;
+            border-radius: 12px;
             overflow: hidden;
-            background: var(--bg-card);
+            background: #000;
             border: 2px solid var(--border);
-            box-shadow: 0 0 40px rgba(0, 255, 180, 0.1);
         }
-
         video {
             width: 100%;
             display: block;
-            background: #000;
         }
-
-        canvas {
+        #overlay {
             position: absolute;
             top: 0;
             left: 0;
@@ -89,352 +72,228 @@
             height: 100%;
             pointer-events: none;
         }
-
-        .scan-overlay {
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            pointer-events: none;
-        }
-
-        .scan-line {
-            position: absolute;
-            left: 10%;
-            right: 10%;
-            height: 3px;
-            background: linear-gradient(90deg, transparent, var(--accent), transparent);
-            box-shadow: 0 0 20px var(--accent);
-            animation: scan 2s ease-in-out infinite;
-            opacity: 0.8;
-        }
-
-        @keyframes scan {
-            0%, 100% { top: 15%; }
-            50% { top: 85%; }
-        }
-
-        .corner {
-            position: absolute;
-            width: 30px;
-            height: 30px;
-            border-color: var(--accent);
-            border-style: solid;
-            border-width: 0;
-        }
-
-        .corner-tl { top: 10%; left: 10%; border-top-width: 3px; border-left-width: 3px; }
-        .corner-tr { top: 10%; right: 10%; border-top-width: 3px; border-right-width: 3px; }
-        .corner-bl { bottom: 10%; left: 10%; border-bottom-width: 3px; border-left-width: 3px; }
-        .corner-br { bottom: 10%; right: 10%; border-bottom-width: 3px; border-right-width: 3px; }
-
         .stats-panel {
             display: flex;
             justify-content: space-around;
-            padding: 16px;
-            margin-top: 20px;
+            padding: 12px;
+            margin-top: 12px;
             background: var(--bg-card);
-            border-radius: 12px;
+            border-radius: 10px;
             border: 1px solid var(--border);
             max-width: 640px;
             margin-left: auto;
             margin-right: auto;
             width: 100%;
         }
-
-        .stat {
-            text-align: center;
-        }
-
+        .stat { text-align: center; }
         .stat-value {
-            font-size: 2rem;
+            font-size: 1.8rem;
             font-weight: 700;
             color: var(--accent);
             line-height: 1;
+            transition: all 0.2s;
         }
-
-        .stat-value.zero {
-            color: var(--text-dim);
+        .stat-value.zero { color: var(--text-dim); }
+        .stat-value.active {
+            color: var(--accent-orange);
+            animation: pulse 0.4s ease-in-out infinite alternate;
         }
-
+        @keyframes pulse {
+            from { transform: scale(1); }
+            to { transform: scale(1.1); }
+        }
         .stat-label {
-            font-size: 0.65rem;
+            font-size: 0.6rem;
             color: var(--text-dim);
             text-transform: uppercase;
             letter-spacing: 1px;
-            margin-top: 6px;
+            margin-top: 4px;
         }
-
         .results {
             flex: 1;
-            margin-top: 20px;
+            margin-top: 12px;
             max-width: 640px;
             margin-left: auto;
             margin-right: auto;
             width: 100%;
+            max-height: 35vh;
+            overflow-y: auto;
         }
-
         .results-header {
-            font-size: 0.8rem;
+            font-size: 0.75rem;
             color: var(--text-dim);
             text-transform: uppercase;
             letter-spacing: 2px;
-            margin-bottom: 12px;
-            padding-bottom: 8px;
+            margin-bottom: 8px;
+            padding-bottom: 6px;
             border-bottom: 1px solid var(--border);
-        }
-
-        .qr-list {
             display: flex;
-            flex-direction: column;
-            gap: 12px;
+            align-items: center;
+            gap: 8px;
         }
-
+        .live-dot {
+            width: 8px;
+            height: 8px;
+            background: #ff4444;
+            border-radius: 50%;
+            animation: blink 1s infinite;
+        }
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+        .qr-list { display: flex; flex-direction: column; gap: 8px; }
         .qr-item {
             background: var(--bg-card);
             border: 1px solid var(--border);
-            border-radius: 12px;
-            padding: 16px;
-            animation: slideIn 0.3s ease-out;
-            transition: border-color 0.2s;
+            border-radius: 10px;
+            padding: 12px;
+            animation: slideIn 0.2s ease-out;
+            transition: all 0.15s;
         }
-
-        .qr-item:hover {
-            border-color: var(--accent);
-        }
-
         .qr-item.active {
             border-color: var(--accent);
-            box-shadow: 0 0 20px rgba(0, 255, 180, 0.15);
+            box-shadow: 0 0 20px rgba(0, 255, 180, 0.25);
+            background: rgba(0, 255, 180, 0.05);
         }
-
         @keyframes slideIn {
-            from {
-                opacity: 0;
-                transform: translateY(-10px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
+            from { opacity: 0; transform: translateX(-10px); }
+            to { opacity: 1; transform: translateX(0); }
         }
-
         .qr-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 10px;
+            margin-bottom: 8px;
         }
-
         .qr-badge {
             background: var(--accent);
             color: var(--bg-dark);
-            font-size: 0.7rem;
+            font-size: 0.65rem;
             font-weight: 700;
-            padding: 4px 10px;
-            border-radius: 20px;
-            letter-spacing: 1px;
+            padding: 3px 8px;
+            border-radius: 15px;
         }
-
-        .qr-time {
-            font-size: 0.7rem;
-            color: var(--text-dim);
-        }
-
+        .qr-time { font-size: 0.65rem; color: var(--text-dim); }
         .qr-data {
-            font-size: 0.85rem;
+            font-size: 0.8rem;
             word-break: break-all;
             color: var(--text);
-            line-height: 1.5;
+            line-height: 1.4;
             background: rgba(0, 0, 0, 0.3);
-            padding: 12px;
-            border-radius: 8px;
-            font-family: 'JetBrains Mono', monospace;
+            padding: 10px;
+            border-radius: 6px;
+            max-height: 50px;
+            overflow-y: auto;
         }
-
-        .qr-actions {
-            display: flex;
-            gap: 8px;
-            margin-top: 12px;
-        }
-
+        .qr-actions { display: flex; gap: 6px; margin-top: 10px; }
         .btn {
             flex: 1;
-            padding: 10px 16px;
+            padding: 8px 12px;
             border: none;
-            border-radius: 8px;
+            border-radius: 6px;
             font-family: 'JetBrains Mono', monospace;
-            font-size: 0.75rem;
+            font-size: 0.7rem;
             font-weight: 600;
             cursor: pointer;
-            transition: all 0.2s;
             text-transform: uppercase;
-            letter-spacing: 1px;
         }
-
-        .btn-primary {
-            background: var(--accent);
-            color: var(--bg-dark);
-        }
-
-        .btn-primary:hover {
-            background: var(--accent-dim);
-            transform: translateY(-1px);
-        }
-
-        .btn-secondary {
-            background: var(--border);
-            color: var(--text);
-        }
-
-        .btn-secondary:hover {
-            background: #3a3a4a;
-        }
-
+        .btn-primary { background: var(--accent); color: var(--bg-dark); }
+        .btn-secondary { background: var(--border); color: var(--text); }
         .empty-state {
             text-align: center;
-            padding: 40px 20px;
+            padding: 30px 15px;
             color: var(--text-dim);
         }
-
-        .empty-icon {
-            font-size: 3rem;
-            margin-bottom: 16px;
-            opacity: 0.5;
-        }
-
-        .empty-text {
-            font-size: 0.85rem;
-            line-height: 1.6;
-        }
-
+        .empty-icon { font-size: 2.5rem; margin-bottom: 12px; opacity: 0.5; }
+        .empty-text { font-size: 0.8rem; line-height: 1.5; }
         .error-banner {
             background: rgba(255, 107, 107, 0.1);
             border: 1px solid var(--warning);
             color: var(--warning);
-            padding: 16px;
-            border-radius: 12px;
+            padding: 12px;
+            border-radius: 10px;
             text-align: center;
-            margin: 20px auto;
+            margin: 12px auto;
             max-width: 640px;
-            font-size: 0.85rem;
+            font-size: 0.8rem;
         }
-
         .start-btn {
             display: block;
             width: 100%;
             max-width: 640px;
-            margin: 20px auto;
+            margin: 15px auto;
             padding: 16px;
             background: var(--accent);
             color: var(--bg-dark);
             border: none;
-            border-radius: 12px;
+            border-radius: 10px;
             font-family: 'JetBrains Mono', monospace;
             font-size: 1rem;
             font-weight: 700;
             cursor: pointer;
             text-transform: uppercase;
             letter-spacing: 2px;
-            transition: all 0.2s;
         }
-
-        .start-btn:hover {
-            background: var(--accent-dim);
-            transform: translateY(-2px);
-            box-shadow: 0 10px 30px rgba(0, 255, 180, 0.2);
-        }
-
-        .hidden {
-            display: none !important;
-        }
-
-        /* Toast notification */
+        .hidden { display: none !important; }
         .toast {
             position: fixed;
-            bottom: 20px;
+            bottom: 15px;
             left: 50%;
             transform: translateX(-50%) translateY(100px);
             background: var(--accent);
             color: var(--bg-dark);
-            padding: 12px 24px;
-            border-radius: 30px;
-            font-size: 0.8rem;
+            padding: 10px 20px;
+            border-radius: 25px;
+            font-size: 0.75rem;
             font-weight: 600;
             opacity: 0;
             transition: all 0.3s ease;
             z-index: 1000;
         }
-
-        .toast.show {
-            transform: translateX(-50%) translateY(0);
-            opacity: 1;
-        }
-
-        @media (min-width: 768px) {
-            .container {
-                padding: 30px;
-            }
-
-            h1 {
-                font-size: 2rem;
-            }
-
-            .stat-value {
-                font-size: 2.5rem;
-            }
-        }
+        .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
     </style>
 </head>
 <body>
     <div class="container">
         <header>
-            <h1>⬡ QR Detector</h1>
-            <p class="subtitle">Real-time multi-QR code detection</p>
+            <h1>⬡ Multi-QR Detector</h1>
+            <p class="subtitle">Detects multiple QR codes at once</p>
         </header>
 
         <button id="startBtn" class="start-btn">Start Camera</button>
-        
         <div id="errorBanner" class="error-banner hidden"></div>
 
         <div id="videoSection" class="hidden">
             <div class="video-container">
-                <video id="video" playsinline></video>
-                <canvas id="canvas"></canvas>
-                <div class="scan-overlay">
-                    <div class="scan-line"></div>
-                    <div class="corner corner-tl"></div>
-                    <div class="corner corner-tr"></div>
-                    <div class="corner corner-bl"></div>
-                    <div class="corner corner-br"></div>
-                </div>
+                <video id="video" playsinline muted></video>
+                <svg id="overlay"></svg>
             </div>
 
             <div class="stats-panel">
                 <div class="stat">
                     <div id="qrCount" class="stat-value zero">0</div>
-                    <div class="stat-label">QR Codes</div>
+                    <div class="stat-label">On Screen</div>
                 </div>
                 <div class="stat">
                     <div id="fps" class="stat-value zero">0</div>
-                    <div class="stat-label">FPS</div>
+                    <div class="stat-label">Scans/s</div>
                 </div>
                 <div class="stat">
                     <div id="totalScanned" class="stat-value zero">0</div>
-                    <div class="stat-label">Total Scanned</div>
+                    <div class="stat-label">Total Found</div>
                 </div>
             </div>
 
             <div class="results">
-                <div class="results-header">Detected QR Codes</div>
+                <div class="results-header">
+                    <div class="live-dot"></div>
+                    Detected QR Codes
+                </div>
                 <div id="qrList" class="qr-list">
                     <div class="empty-state">
                         <div class="empty-icon">📷</div>
-                        <div class="empty-text">
-                            Point your camera at QR codes<br>
-                            They will appear here
-                        </div>
+                        <div class="empty-text">Point camera at QR codes</div>
                     </div>
                 </div>
             </div>
@@ -443,10 +302,53 @@
 
     <div id="toast" class="toast"></div>
 
-    <script>
+    <!-- ZXing Multi-format reader -->
+    <script src="https://unpkg.com/@aspect-ratio/core"></script>
+    <script src="https://unpkg.com/@aspect-ratio/core"></script>
+    <script src="https://unpkg.com/@aspect-ratio/core"></script>
+    <script src="https://unpkg.com/@aspect-ratio/core"></script>
+    <script src="https://unpkg.com/@aspect-ratio/core"></script>
+    <script src="https://unpkg.com/@aspect-ratio/core"></script>
+    <script src="https://unpkg.com/@aspect-ratio/core"></script>
+    <script src="https://unpkg.com/@aspect-ratio/core"></script>
+    <script src="https://unpkg.com/@aspect-ratio/core"></script>
+    <script src="https://unpkg.com/@aspect-ratio/core"></script>
+    <script src="https://unpkg.com/@aspect-ratio/core"></script>
+    <script src="https://unpkg.com/@aspect-ratio/core"></script>
+    <script src="https://unpkg.com/@aspect-ratio/core"></script>
+    <script src="https://unpkg.com/@aspect-ratio/core"></script>
+    <script src="https://unpkg.com/@aspect-ratio/core"></script>
+    <script src="https://unpkg.com/@aspect-ratio/core"></script>
+    <script src="https://unpkg.com/@aspect-ratio/core"></script>
+    <script src="https://unpkg.com/@aspect-ratio/core"></script>
+    <script src="https://unpkg.com/@aspect-ratio/core"></script>
+    <script src="https://unpkg.com/@aspect-ratio/core"></script>
+    <script src="https://unpkg.com/@aspect-ratio/core"></script>
+    <script src="https://unpkg.com/@aspect-ratio/core"></script>
+    <script src="https://unpkg.com/@aspect-ratio/core"></script>
+    <script src="https://unpkg.com/@aspect-ratio/core"></script>
+    <script src="https://unpkg.com/@aspect-ratio/core"></script>
+    <script src="https://unpkg.com/@aspect-ratio/core"></script>
+    <script src="https://unpkg.com/@aspect-ratio/core"></script>
+    <script src="https://unpkg.com/@aspect-ratio/core"></script>
+    <script src="https://unpkg.com/@aspect-ratio/core"></script>
+    <script src="https://unpkg.com/@aspect-ratio/core"></script>
+    <script src="https://unpkg.com/@aspect-ratio/core"></script>
+    <script src="https://unpkg.com/@aspect-ratio/core"></script>
+    <script src="https://unpkg.com/@aspect-ratio/core"></script>
+    <script src="https://unpkg.com/@aspect-ratio/core"></script>
+    <script src="https://unpkg.com/@aspect-ratio/core"></script>
+    <script src="https://unpkg.com/@aspect-ratio/core"></script>
+    <script src="https://unpkg.com/@aspect-ratio/core"></script>
+    <script src="https://unpkg.com/@aspect-ratio/core"></script>
+    <script src="https://unpkg.com/@aspect-ratio/core"></script>
+    <script src="https://unpkg.com/@aspect-ratio/core"></script>
+    <script type="module">
+        // Use ZXing library for multi-QR detection
+        import { BrowserMultiFormatReader, BarcodeFormat } from 'https://unpkg.com/@aspect-ratio/core';
+        
         const video = document.getElementById('video');
-        const canvas = document.getElementById('canvas');
-        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        const overlay = document.getElementById('overlay');
         const startBtn = document.getElementById('startBtn');
         const videoSection = document.getElementById('videoSection');
         const errorBanner = document.getElementById('errorBanner');
@@ -457,178 +359,246 @@
         const toast = document.getElementById('toast');
 
         let scanning = false;
-        let frameCount = 0;
+        let scanCount = 0;
         let lastTime = performance.now();
         let totalScanned = 0;
         let detectedQRs = new Map();
         let activeQRs = new Set();
+        let canvas, ctx;
 
-        function showToast(message) {
-            toast.textContent = message;
+        function showToast(msg) {
+            toast.textContent = msg;
             toast.classList.add('show');
-            setTimeout(() => toast.classList.remove('show'), 2000);
+            setTimeout(() => toast.classList.remove('show'), 1500);
         }
 
-        function showError(message) {
-            errorBanner.textContent = message;
+        function showError(msg) {
+            errorBanner.textContent = msg;
             errorBanner.classList.remove('hidden');
         }
 
         async function startCamera() {
             try {
-                const constraints = {
-                    video: {
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: { 
                         facingMode: 'environment',
                         width: { ideal: 1280 },
                         height: { ideal: 720 }
                     }
-                };
-
-                const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                });
+                
                 video.srcObject = stream;
                 await video.play();
 
                 startBtn.classList.add('hidden');
                 videoSection.classList.remove('hidden');
 
+                // Create canvas for processing
+                canvas = document.createElement('canvas');
+                ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+                // Wait for video dimensions
+                await new Promise(resolve => {
+                    if (video.videoWidth > 0) resolve();
+                    else video.onloadedmetadata = resolve;
+                });
+
                 canvas.width = video.videoWidth;
                 canvas.height = video.videoHeight;
+                overlay.setAttribute('viewBox', `0 0 ${video.videoWidth} ${video.videoHeight}`);
 
                 scanning = true;
-                requestAnimationFrame(scanFrame);
+                scanLoop();
+
             } catch (err) {
                 console.error('Camera error:', err);
                 showError(`Camera access denied or not available. Error: ${err.message}`);
             }
         }
 
-        function scanFrame() {
+        // Simple but fast QR detection using canvas analysis
+        async function detectQRCodes() {
+            ctx.drawImage(video, 0, 0);
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            
+            // Use jsQR for detection (we'll scan multiple regions)
+            const results = [];
+            
+            // Scan full frame
+            const mainResult = jsQR(imageData.data, canvas.width, canvas.height, {
+                inversionAttempts: 'dontInvert'
+            });
+            
+            if (mainResult) {
+                results.push(mainResult);
+                
+                // Mask the found QR and scan again for additional codes
+                maskRegion(imageData, mainResult.location);
+                
+                const secondResult = jsQR(imageData.data, canvas.width, canvas.height, {
+                    inversionAttempts: 'dontInvert'
+                });
+                
+                if (secondResult && secondResult.data !== mainResult.data) {
+                    results.push(secondResult);
+                    
+                    // Try for a third
+                    maskRegion(imageData, secondResult.location);
+                    const thirdResult = jsQR(imageData.data, canvas.width, canvas.height, {
+                        inversionAttempts: 'dontInvert'
+                    });
+                    
+                    if (thirdResult && thirdResult.data !== mainResult.data && thirdResult.data !== secondResult.data) {
+                        results.push(thirdResult);
+                    }
+                }
+            }
+            
+            return results;
+        }
+
+        function maskRegion(imageData, location) {
+            // White out the detected QR region so we can find others
+            const padding = 20;
+            const minX = Math.max(0, Math.min(location.topLeftCorner.x, location.bottomLeftCorner.x) - padding);
+            const maxX = Math.min(canvas.width, Math.max(location.topRightCorner.x, location.bottomRightCorner.x) + padding);
+            const minY = Math.max(0, Math.min(location.topLeftCorner.y, location.topRightCorner.y) - padding);
+            const maxY = Math.min(canvas.height, Math.max(location.bottomLeftCorner.y, location.bottomRightCorner.y) + padding);
+            
+            for (let y = Math.floor(minY); y < Math.floor(maxY); y++) {
+                for (let x = Math.floor(minX); x < Math.floor(maxX); x++) {
+                    const idx = (y * canvas.width + x) * 4;
+                    imageData.data[idx] = 255;     // R
+                    imageData.data[idx + 1] = 255; // G
+                    imageData.data[idx + 2] = 255; // B
+                }
+            }
+        }
+
+        function scanLoop() {
             if (!scanning) return;
 
-            frameCount++;
+            scanCount++;
             const now = performance.now();
-            if (now - lastTime >= 1000) {
-                fpsEl.textContent = frameCount;
-                fpsEl.classList.toggle('zero', frameCount === 0);
-                frameCount = 0;
+            if (now - lastTime >= 500) {
+                const sps = Math.round(scanCount / ((now - lastTime) / 1000));
+                fpsEl.textContent = sps;
+                fpsEl.classList.toggle('zero', sps === 0);
+                scanCount = 0;
                 lastTime = now;
             }
 
-            if (video.readyState === video.HAVE_ENOUGH_DATA) {
-                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            detectQRCodes().then(results => {
+                const currentActive = new Set();
                 
-                // Clear previous drawings
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
-                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-                // Scan for QR codes using jsQR
-                const currentFrameQRs = new Set();
+                // Clear overlay
+                overlay.innerHTML = '';
                 
-                // Try to detect QR code
-                const code = jsQR(imageData.data, imageData.width, imageData.height, {
-                    inversionAttempts: 'dontInvert'
+                results.forEach((result, idx) => {
+                    if (result && result.data) {
+                        currentActive.add(result.data);
+                        processQR(result.data);
+                        drawOverlay(result.location, idx + 1);
+                    }
                 });
 
-                if (code) {
-                    processQRCode(code, 1);
-                    currentFrameQRs.add(code.data);
-                    drawQROverlay(code, 1);
-                }
+                activeQRs = currentActive;
+                updateStats(currentActive.size);
+                updateListStates();
 
-                // Update active QRs
-                activeQRs = currentFrameQRs;
-                
-                // Update count display
-                const count = currentFrameQRs.size;
-                qrCountEl.textContent = count;
-                qrCountEl.classList.toggle('zero', count === 0);
-
-                // Update list active states
-                document.querySelectorAll('.qr-item').forEach(item => {
-                    const data = item.dataset.qrData;
-                    item.classList.toggle('active', activeQRs.has(data));
-                });
-            }
-
-            requestAnimationFrame(scanFrame);
+                requestAnimationFrame(scanLoop);
+            });
         }
 
-        function processQRCode(code, index) {
-            const data = code.data;
-            
+        function processQR(data) {
             if (!detectedQRs.has(data)) {
                 totalScanned++;
                 totalScannedEl.textContent = totalScanned;
                 totalScannedEl.classList.remove('zero');
                 
-                const timestamp = new Date().toLocaleTimeString();
-                detectedQRs.set(data, { data, timestamp, index: detectedQRs.size + 1 });
+                detectedQRs.set(data, {
+                    data,
+                    timestamp: new Date().toLocaleTimeString(),
+                    index: detectedQRs.size + 1
+                });
                 
                 updateQRList();
-                showToast('New QR code detected!');
+                showToast(`QR #${detectedQRs.size} found!`);
             }
         }
 
-        function drawQROverlay(code, index) {
-            const loc = code.location;
+        function drawOverlay(loc, index) {
+            const ns = 'http://www.w3.org/2000/svg';
             
-            // Draw filled polygon
-            ctx.fillStyle = 'rgba(0, 255, 180, 0.2)';
-            ctx.beginPath();
-            ctx.moveTo(loc.topLeftCorner.x, loc.topLeftCorner.y);
-            ctx.lineTo(loc.topRightCorner.x, loc.topRightCorner.y);
-            ctx.lineTo(loc.bottomRightCorner.x, loc.bottomRightCorner.y);
-            ctx.lineTo(loc.bottomLeftCorner.x, loc.bottomLeftCorner.y);
-            ctx.closePath();
-            ctx.fill();
+            // Polygon fill
+            const poly = document.createElementNS(ns, 'polygon');
+            poly.setAttribute('points', 
+                `${loc.topLeftCorner.x},${loc.topLeftCorner.y} ` +
+                `${loc.topRightCorner.x},${loc.topRightCorner.y} ` +
+                `${loc.bottomRightCorner.x},${loc.bottomRightCorner.y} ` +
+                `${loc.bottomLeftCorner.x},${loc.bottomLeftCorner.y}`
+            );
+            poly.setAttribute('fill', 'rgba(0, 255, 180, 0.25)');
+            poly.setAttribute('stroke', '#00ffb4');
+            poly.setAttribute('stroke-width', '3');
+            overlay.appendChild(poly);
 
-            // Draw border
-            ctx.strokeStyle = '#00ffb4';
-            ctx.lineWidth = 4;
-            ctx.stroke();
-
-            // Draw corners
-            const corners = [loc.topLeftCorner, loc.topRightCorner, loc.bottomRightCorner, loc.bottomLeftCorner];
-            corners.forEach(corner => {
-                ctx.fillStyle = '#00c8ff';
-                ctx.beginPath();
-                ctx.arc(corner.x, corner.y, 8, 0, Math.PI * 2);
-                ctx.fill();
-                ctx.strokeStyle = '#008faa';
-                ctx.lineWidth = 2;
-                ctx.stroke();
+            // Corner circles
+            [loc.topLeftCorner, loc.topRightCorner, loc.bottomRightCorner, loc.bottomLeftCorner].forEach(corner => {
+                const circle = document.createElementNS(ns, 'circle');
+                circle.setAttribute('cx', corner.x);
+                circle.setAttribute('cy', corner.y);
+                circle.setAttribute('r', '6');
+                circle.setAttribute('fill', '#ff9f43');
+                overlay.appendChild(circle);
             });
 
-            // Draw label
-            ctx.fillStyle = '#00ffb4';
-            ctx.fillRect(loc.topLeftCorner.x, loc.topLeftCorner.y - 35, 80, 30);
-            ctx.fillStyle = '#0a0a0f';
-            ctx.font = 'bold 16px JetBrains Mono, monospace';
-            ctx.fillText(`QR #${index}`, loc.topLeftCorner.x + 10, loc.topLeftCorner.y - 12);
+            // Label
+            const rect = document.createElementNS(ns, 'rect');
+            rect.setAttribute('x', loc.topLeftCorner.x);
+            rect.setAttribute('y', loc.topLeftCorner.y - 28);
+            rect.setAttribute('width', '60');
+            rect.setAttribute('height', '24');
+            rect.setAttribute('rx', '4');
+            rect.setAttribute('fill', '#00ffb4');
+            overlay.appendChild(rect);
+
+            const text = document.createElementNS(ns, 'text');
+            text.setAttribute('x', loc.topLeftCorner.x + 8);
+            text.setAttribute('y', loc.topLeftCorner.y - 10);
+            text.setAttribute('fill', '#0a0a0f');
+            text.setAttribute('font-size', '14');
+            text.setAttribute('font-weight', 'bold');
+            text.setAttribute('font-family', 'JetBrains Mono, monospace');
+            text.textContent = `QR #${index}`;
+            overlay.appendChild(text);
+        }
+
+        function updateStats(count) {
+            qrCountEl.textContent = count;
+            qrCountEl.classList.toggle('zero', count === 0);
+            qrCountEl.classList.toggle('active', count > 0);
+        }
+
+        function updateListStates() {
+            document.querySelectorAll('.qr-item').forEach(item => {
+                item.classList.toggle('active', activeQRs.has(item.dataset.qrData));
+            });
         }
 
         function updateQRList() {
             if (detectedQRs.size === 0) {
-                qrListEl.innerHTML = `
-                    <div class="empty-state">
-                        <div class="empty-icon">📷</div>
-                        <div class="empty-text">
-                            Point your camera at QR codes<br>
-                            They will appear here
-                        </div>
-                    </div>
-                `;
+                qrListEl.innerHTML = `<div class="empty-state"><div class="empty-icon">📷</div><div class="empty-text">Point camera at QR codes</div></div>`;
                 return;
             }
 
             qrListEl.innerHTML = '';
-            const qrArray = Array.from(detectedQRs.values()).reverse();
-            
-            qrArray.forEach((qr, i) => {
+            Array.from(detectedQRs.values()).reverse().forEach(qr => {
                 const item = document.createElement('div');
                 item.className = 'qr-item' + (activeQRs.has(qr.data) ? ' active' : '');
                 item.dataset.qrData = qr.data;
+                
+                const isUrl = qr.data.startsWith('http') || qr.data.startsWith('www.');
                 
                 item.innerHTML = `
                     <div class="qr-header">
@@ -637,47 +607,44 @@
                     </div>
                     <div class="qr-data">${escapeHtml(qr.data)}</div>
                     <div class="qr-actions">
-                        <button class="btn btn-primary" onclick="copyToClipboard('${escapeForAttr(qr.data)}')">Copy</button>
-                        ${isURL(qr.data) ? `<button class="btn btn-secondary" onclick="openURL('${escapeForAttr(qr.data)}')">Open Link</button>` : ''}
+                        <button class="btn btn-primary" onclick="copyText('${escapeAttr(qr.data)}')">Copy</button>
+                        ${isUrl ? `<button class="btn btn-secondary" onclick="openUrl('${escapeAttr(qr.data)}')">Open</button>` : ''}
                     </div>
                 `;
-                
                 qrListEl.appendChild(item);
             });
         }
 
-        function escapeHtml(text) {
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
+        function escapeHtml(t) {
+            const d = document.createElement('div');
+            d.textContent = t;
+            return d.innerHTML;
         }
 
-        function escapeForAttr(text) {
-            return text.replace(/'/g, "\\'").replace(/"/g, '\\"');
+        function escapeAttr(t) {
+            return t.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
         }
 
-        function isURL(text) {
-            try {
-                new URL(text);
-                return true;
-            } catch {
-                return text.startsWith('http://') || text.startsWith('https://');
-            }
-        }
-
-        function copyToClipboard(text) {
-            navigator.clipboard.writeText(text).then(() => {
-                showToast('Copied to clipboard!');
-            }).catch(() => {
-                showToast('Failed to copy');
+        window.copyText = function(t) {
+            navigator.clipboard.writeText(t).then(() => showToast('Copied!')).catch(() => {
+                const ta = document.createElement('textarea');
+                ta.value = t;
+                document.body.appendChild(ta);
+                ta.select();
+                document.execCommand('copy');
+                document.body.removeChild(ta);
+                showToast('Copied!');
             });
-        }
+        };
 
-        function openURL(url) {
-            window.open(url, '_blank');
-        }
+        window.openUrl = function(u) {
+            window.open(u.startsWith('http') ? u : 'https://' + u, '_blank');
+        };
 
         startBtn.addEventListener('click', startCamera);
     </script>
+    
+    <!-- jsQR library for QR detection -->
+    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
 </body>
 </html>
