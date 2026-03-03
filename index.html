@@ -302,51 +302,10 @@
 
     <div id="toast" class="toast"></div>
 
-    <!-- ZXing Multi-format reader -->
-    <script src="https://unpkg.com/@aspect-ratio/core"></script>
-    <script src="https://unpkg.com/@aspect-ratio/core"></script>
-    <script src="https://unpkg.com/@aspect-ratio/core"></script>
-    <script src="https://unpkg.com/@aspect-ratio/core"></script>
-    <script src="https://unpkg.com/@aspect-ratio/core"></script>
-    <script src="https://unpkg.com/@aspect-ratio/core"></script>
-    <script src="https://unpkg.com/@aspect-ratio/core"></script>
-    <script src="https://unpkg.com/@aspect-ratio/core"></script>
-    <script src="https://unpkg.com/@aspect-ratio/core"></script>
-    <script src="https://unpkg.com/@aspect-ratio/core"></script>
-    <script src="https://unpkg.com/@aspect-ratio/core"></script>
-    <script src="https://unpkg.com/@aspect-ratio/core"></script>
-    <script src="https://unpkg.com/@aspect-ratio/core"></script>
-    <script src="https://unpkg.com/@aspect-ratio/core"></script>
-    <script src="https://unpkg.com/@aspect-ratio/core"></script>
-    <script src="https://unpkg.com/@aspect-ratio/core"></script>
-    <script src="https://unpkg.com/@aspect-ratio/core"></script>
-    <script src="https://unpkg.com/@aspect-ratio/core"></script>
-    <script src="https://unpkg.com/@aspect-ratio/core"></script>
-    <script src="https://unpkg.com/@aspect-ratio/core"></script>
-    <script src="https://unpkg.com/@aspect-ratio/core"></script>
-    <script src="https://unpkg.com/@aspect-ratio/core"></script>
-    <script src="https://unpkg.com/@aspect-ratio/core"></script>
-    <script src="https://unpkg.com/@aspect-ratio/core"></script>
-    <script src="https://unpkg.com/@aspect-ratio/core"></script>
-    <script src="https://unpkg.com/@aspect-ratio/core"></script>
-    <script src="https://unpkg.com/@aspect-ratio/core"></script>
-    <script src="https://unpkg.com/@aspect-ratio/core"></script>
-    <script src="https://unpkg.com/@aspect-ratio/core"></script>
-    <script src="https://unpkg.com/@aspect-ratio/core"></script>
-    <script src="https://unpkg.com/@aspect-ratio/core"></script>
-    <script src="https://unpkg.com/@aspect-ratio/core"></script>
-    <script src="https://unpkg.com/@aspect-ratio/core"></script>
-    <script src="https://unpkg.com/@aspect-ratio/core"></script>
-    <script src="https://unpkg.com/@aspect-ratio/core"></script>
-    <script src="https://unpkg.com/@aspect-ratio/core"></script>
-    <script src="https://unpkg.com/@aspect-ratio/core"></script>
-    <script src="https://unpkg.com/@aspect-ratio/core"></script>
-    <script src="https://unpkg.com/@aspect-ratio/core"></script>
-    <script src="https://unpkg.com/@aspect-ratio/core"></script>
-    <script type="module">
-        // Use ZXing library for multi-QR detection
-        import { BrowserMultiFormatReader, BarcodeFormat } from 'https://unpkg.com/@aspect-ratio/core';
-        
+    <!-- jsQR library -->
+    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+    
+    <script>
         const video = document.getElementById('video');
         const overlay = document.getElementById('overlay');
         const startBtn = document.getElementById('startBtn');
@@ -363,8 +322,9 @@
         let lastTime = performance.now();
         let totalScanned = 0;
         let detectedQRs = new Map();
-        let activeQRs = new Set();
+        let activeQRs = new Map(); // data -> location
         let canvas, ctx;
+        let regionCanvas, regionCtx;
 
         function showToast(msg) {
             toast.textContent = msg;
@@ -393,11 +353,14 @@
                 startBtn.classList.add('hidden');
                 videoSection.classList.remove('hidden');
 
-                // Create canvas for processing
+                // Create main canvas
                 canvas = document.createElement('canvas');
                 ctx = canvas.getContext('2d', { willReadFrequently: true });
+                
+                // Create region canvas for sub-scanning
+                regionCanvas = document.createElement('canvas');
+                regionCtx = regionCanvas.getContext('2d', { willReadFrequently: true });
 
-                // Wait for video dimensions
                 await new Promise(resolve => {
                     if (video.videoWidth > 0) resolve();
                     else video.onloadedmetadata = resolve;
@@ -416,63 +379,123 @@
             }
         }
 
-        // Simple but fast QR detection using canvas analysis
-        async function detectQRCodes() {
+        // Multi-region scanning for grouped QR codes
+        function detectMultipleQRCodes() {
             ctx.drawImage(video, 0, 0);
-            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const fullImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
             
-            // Use jsQR for detection (we'll scan multiple regions)
-            const results = [];
+            const results = new Map(); // Use map to dedupe by data
+            const w = canvas.width;
+            const h = canvas.height;
+
+            // 1. First scan the FULL frame
+            const fullResult = jsQR(fullImageData.data, w, h, { inversionAttempts: 'dontInvert' });
+            if (fullResult && fullResult.data) {
+                results.set(fullResult.data, fullResult);
+            }
+
+            // 2. Scan overlapping grid regions (3x3 grid with overlap)
+            const gridSize = 3;
+            const overlap = 0.3; // 30% overlap between regions
             
-            // Scan full frame
-            const mainResult = jsQR(imageData.data, canvas.width, canvas.height, {
-                inversionAttempts: 'dontInvert'
-            });
-            
-            if (mainResult) {
-                results.push(mainResult);
-                
-                // Mask the found QR and scan again for additional codes
-                maskRegion(imageData, mainResult.location);
-                
-                const secondResult = jsQR(imageData.data, canvas.width, canvas.height, {
-                    inversionAttempts: 'dontInvert'
-                });
-                
-                if (secondResult && secondResult.data !== mainResult.data) {
-                    results.push(secondResult);
+            for (let row = 0; row < gridSize; row++) {
+                for (let col = 0; col < gridSize; col++) {
+                    const regionW = Math.floor(w / (gridSize - overlap));
+                    const regionH = Math.floor(h / (gridSize - overlap));
+                    const startX = Math.floor(col * (w - regionW) / (gridSize - 1));
+                    const startY = Math.floor(row * (h - regionH) / (gridSize - 1));
                     
-                    // Try for a third
-                    maskRegion(imageData, secondResult.location);
-                    const thirdResult = jsQR(imageData.data, canvas.width, canvas.height, {
-                        inversionAttempts: 'dontInvert'
-                    });
+                    // Clamp to bounds
+                    const actualW = Math.min(regionW, w - startX);
+                    const actualH = Math.min(regionH, h - startY);
                     
-                    if (thirdResult && thirdResult.data !== mainResult.data && thirdResult.data !== secondResult.data) {
-                        results.push(thirdResult);
+                    if (actualW > 100 && actualH > 100) {
+                        const regionData = ctx.getImageData(startX, startY, actualW, actualH);
+                        const result = jsQR(regionData.data, actualW, actualH, { inversionAttempts: 'dontInvert' });
+                        
+                        if (result && result.data && !results.has(result.data)) {
+                            // Adjust coordinates back to full frame
+                            result.location.topLeftCorner.x += startX;
+                            result.location.topLeftCorner.y += startY;
+                            result.location.topRightCorner.x += startX;
+                            result.location.topRightCorner.y += startY;
+                            result.location.bottomLeftCorner.x += startX;
+                            result.location.bottomLeftCorner.y += startY;
+                            result.location.bottomRightCorner.x += startX;
+                            result.location.bottomRightCorner.y += startY;
+                            results.set(result.data, result);
+                        }
                     }
                 }
             }
-            
-            return results;
-        }
 
-        function maskRegion(imageData, location) {
-            // White out the detected QR region so we can find others
-            const padding = 20;
-            const minX = Math.max(0, Math.min(location.topLeftCorner.x, location.bottomLeftCorner.x) - padding);
-            const maxX = Math.min(canvas.width, Math.max(location.topRightCorner.x, location.bottomRightCorner.x) + padding);
-            const minY = Math.max(0, Math.min(location.topLeftCorner.y, location.topRightCorner.y) - padding);
-            const maxY = Math.min(canvas.height, Math.max(location.bottomLeftCorner.y, location.bottomRightCorner.y) + padding);
-            
-            for (let y = Math.floor(minY); y < Math.floor(maxY); y++) {
-                for (let x = Math.floor(minX); x < Math.floor(maxX); x++) {
-                    const idx = (y * canvas.width + x) * 4;
-                    imageData.data[idx] = 255;     // R
-                    imageData.data[idx + 1] = 255; // G
-                    imageData.data[idx + 2] = 255; // B
+            // 3. Scan quadrants with different sizes
+            const quadrants = [
+                { x: 0, y: 0, w: w * 0.55, h: h * 0.55 },           // Top-left
+                { x: w * 0.45, y: 0, w: w * 0.55, h: h * 0.55 },    // Top-right
+                { x: 0, y: h * 0.45, w: w * 0.55, h: h * 0.55 },    // Bottom-left
+                { x: w * 0.45, y: h * 0.45, w: w * 0.55, h: h * 0.55 }, // Bottom-right
+                { x: w * 0.2, y: h * 0.2, w: w * 0.6, h: h * 0.6 }, // Center
+                { x: 0, y: h * 0.25, w: w, h: h * 0.5 },            // Middle horizontal strip
+                { x: w * 0.25, y: 0, w: w * 0.5, h: h },            // Middle vertical strip
+            ];
+
+            quadrants.forEach(q => {
+                const sx = Math.floor(q.x);
+                const sy = Math.floor(q.y);
+                const sw = Math.floor(Math.min(q.w, w - sx));
+                const sh = Math.floor(Math.min(q.h, h - sy));
+                
+                if (sw > 50 && sh > 50) {
+                    const regionData = ctx.getImageData(sx, sy, sw, sh);
+                    const result = jsQR(regionData.data, sw, sh, { inversionAttempts: 'dontInvert' });
+                    
+                    if (result && result.data && !results.has(result.data)) {
+                        result.location.topLeftCorner.x += sx;
+                        result.location.topLeftCorner.y += sy;
+                        result.location.topRightCorner.x += sx;
+                        result.location.topRightCorner.y += sy;
+                        result.location.bottomLeftCorner.x += sx;
+                        result.location.bottomLeftCorner.y += sy;
+                        result.location.bottomRightCorner.x += sx;
+                        result.location.bottomRightCorner.y += sy;
+                        results.set(result.data, result);
+                    }
+                }
+            });
+
+            // 4. Try with enhanced contrast on full image
+            if (results.size < 3) {
+                const enhanced = enhanceContrast(fullImageData);
+                const enhancedResult = jsQR(enhanced.data, w, h, { inversionAttempts: 'attemptBoth' });
+                if (enhancedResult && enhancedResult.data && !results.has(enhancedResult.data)) {
+                    results.set(enhancedResult.data, enhancedResult);
                 }
             }
+
+            return Array.from(results.values());
+        }
+
+        function enhanceContrast(imageData) {
+            const data = new Uint8ClampedArray(imageData.data);
+            
+            // Find min/max for contrast stretching
+            let min = 255, max = 0;
+            for (let i = 0; i < data.length; i += 4) {
+                const gray = (data[i] + data[i + 1] + data[i + 2]) / 3;
+                if (gray < min) min = gray;
+                if (gray > max) max = gray;
+            }
+            
+            const range = max - min || 1;
+            
+            for (let i = 0; i < data.length; i += 4) {
+                const gray = (data[i] + data[i + 1] + data[i + 2]) / 3;
+                const stretched = ((gray - min) / range) * 255;
+                data[i] = data[i + 1] = data[i + 2] = stretched;
+            }
+            
+            return { data, width: imageData.width, height: imageData.height };
         }
 
         function scanLoop() {
@@ -488,26 +511,26 @@
                 lastTime = now;
             }
 
-            detectQRCodes().then(results => {
-                const currentActive = new Set();
-                
-                // Clear overlay
-                overlay.innerHTML = '';
-                
-                results.forEach((result, idx) => {
-                    if (result && result.data) {
-                        currentActive.add(result.data);
-                        processQR(result.data);
-                        drawOverlay(result.location, idx + 1);
-                    }
-                });
-
-                activeQRs = currentActive;
-                updateStats(currentActive.size);
-                updateListStates();
-
-                requestAnimationFrame(scanLoop);
+            const results = detectMultipleQRCodes();
+            const currentActive = new Map();
+            
+            // Clear overlay
+            overlay.innerHTML = '';
+            
+            let idx = 1;
+            results.forEach(result => {
+                if (result && result.data) {
+                    currentActive.set(result.data, result.location);
+                    processQR(result.data);
+                    drawOverlay(result.location, idx++);
+                }
             });
+
+            activeQRs = currentActive;
+            updateStats(currentActive.size);
+            updateListStates();
+
+            requestAnimationFrame(scanLoop);
         }
 
         function processQR(data) {
@@ -530,6 +553,10 @@
         function drawOverlay(loc, index) {
             const ns = 'http://www.w3.org/2000/svg';
             
+            // Colors for different QR codes
+            const colors = ['#00ffb4', '#ff9f43', '#ff6b9d', '#9d65ff', '#65d9ff', '#ffeb3b'];
+            const color = colors[(index - 1) % colors.length];
+            
             // Polygon fill
             const poly = document.createElementNS(ns, 'polygon');
             poly.setAttribute('points', 
@@ -538,9 +565,10 @@
                 `${loc.bottomRightCorner.x},${loc.bottomRightCorner.y} ` +
                 `${loc.bottomLeftCorner.x},${loc.bottomLeftCorner.y}`
             );
-            poly.setAttribute('fill', 'rgba(0, 255, 180, 0.25)');
-            poly.setAttribute('stroke', '#00ffb4');
-            poly.setAttribute('stroke-width', '3');
+            poly.setAttribute('fill', color.replace(')', ', 0.25)').replace('rgb', 'rgba').replace('#', 'rgba('));
+            poly.style.fill = `${color}40`;
+            poly.setAttribute('stroke', color);
+            poly.setAttribute('stroke-width', '4');
             overlay.appendChild(poly);
 
             // Corner circles
@@ -548,25 +576,28 @@
                 const circle = document.createElementNS(ns, 'circle');
                 circle.setAttribute('cx', corner.x);
                 circle.setAttribute('cy', corner.y);
-                circle.setAttribute('r', '6');
-                circle.setAttribute('fill', '#ff9f43');
+                circle.setAttribute('r', '8');
+                circle.setAttribute('fill', color);
+                circle.setAttribute('stroke', '#000');
+                circle.setAttribute('stroke-width', '2');
                 overlay.appendChild(circle);
             });
 
             // Label
+            const labelY = Math.max(30, loc.topLeftCorner.y - 10);
             const rect = document.createElementNS(ns, 'rect');
             rect.setAttribute('x', loc.topLeftCorner.x);
-            rect.setAttribute('y', loc.topLeftCorner.y - 28);
-            rect.setAttribute('width', '60');
-            rect.setAttribute('height', '24');
-            rect.setAttribute('rx', '4');
-            rect.setAttribute('fill', '#00ffb4');
+            rect.setAttribute('y', labelY - 26);
+            rect.setAttribute('width', '65');
+            rect.setAttribute('height', '26');
+            rect.setAttribute('rx', '5');
+            rect.setAttribute('fill', color);
             overlay.appendChild(rect);
 
             const text = document.createElementNS(ns, 'text');
             text.setAttribute('x', loc.topLeftCorner.x + 8);
-            text.setAttribute('y', loc.topLeftCorner.y - 10);
-            text.setAttribute('fill', '#0a0a0f');
+            text.setAttribute('y', labelY - 8);
+            text.setAttribute('fill', '#000');
             text.setAttribute('font-size', '14');
             text.setAttribute('font-weight', 'bold');
             text.setAttribute('font-family', 'JetBrains Mono, monospace');
@@ -643,8 +674,5 @@
 
         startBtn.addEventListener('click', startCamera);
     </script>
-    
-    <!-- jsQR library for QR detection -->
-    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
 </body>
 </html>
