@@ -458,16 +458,16 @@
 
         // Category color palette
         const colorPalette = [
-            { bg: '#ff6b6b', text: '#fff' },  // Red - Food & Beverage
-            { bg: '#4ecdc4', text: '#000' },  // Teal - Technology
-            { bg: '#45b7d1', text: '#000' },  // Blue - Social Media
-            { bg: '#96ceb4', text: '#000' },  // Green - Shopping
-            { bg: '#ffeaa7', text: '#000' },  // Yellow - Entertainment
-            { bg: '#dfe6e9', text: '#000' },  // Gray - Other
-            { bg: '#a29bfe', text: '#000' },  // Purple - Education
-            { bg: '#fd79a8', text: '#000' },  // Pink - Health
-            { bg: '#ffeaa7', text: '#000' },  // Yellow - Finance
-            { bg: '#74b9ff', text: '#000' },  // Light Blue - Travel
+            { bg: '#ff6b6b', text: '#fff' },  // Red
+            { bg: '#4ecdc4', text: '#000' },  // Teal
+            { bg: '#45b7d1', text: '#000' },  // Blue
+            { bg: '#96ceb4', text: '#000' },  // Green
+            { bg: '#ffeaa7', text: '#000' },  // Yellow
+            { bg: '#dfe6e9', text: '#000' },  // Gray
+            { bg: '#a29bfe', text: '#000' },  // Purple
+            { bg: '#fd79a8', text: '#000' },  // Pink
+            { bg: '#fdcb6e', text: '#000' },  // Orange
+            { bg: '#74b9ff', text: '#000' },  // Light Blue
         ];
         let colorIndex = 0;
 
@@ -505,26 +505,26 @@
                         model: aiModel,
                         messages: [{
                             role: 'user',
-                            content: `Categorize this QR code content into ONE category. Reply with ONLY the category name, nothing else.
+                            content: `Categorize this QR code content into ONE short category (1-2 words max). 
 
-Categories to choose from:
-- Food & Beverage (restaurants, cafes, food delivery, drinks)
-- Technology (IT, electronics, software, hardware, tech companies)
-- Shopping (retail, e-commerce, products, stores)
-- Social Media (social networks, messaging, content platforms)
-- Entertainment (movies, music, games, streaming)
-- Finance (banking, payments, crypto, investments)
-- Travel (airlines, hotels, tourism, transportation)
-- Education (schools, courses, learning, tutorials)
-- Health (medical, fitness, wellness, pharmacy)
-- News & Media (news sites, blogs, magazines)
-- Business (corporate, B2B, professional services)
-- Government (official, public services)
-- Other (if none of the above fit)
+Common categories:
+- Food & Beverage (restaurants, cafes, food delivery)
+- Technology/IT (tech companies, software, electronics)
+- Shopping (retail, e-commerce)
+- Social Media (social networks, messaging)
+- Entertainment (movies, music, games)
+- Finance (banking, payments)
+- Travel (airlines, hotels)
+- Education (schools, courses)
+- Health (medical, fitness)
+- News/Media
+- Business
+- Government
+- Other
 
 QR Content: ${qrData}
 
-Reply with ONLY the category name:`
+Reply with ONLY the category name, nothing else:`
                         }],
                         max_tokens: 20,
                         temperature: 0.1
@@ -540,8 +540,8 @@ Reply with ONLY the category name:`
                 
                 // Clean up the category
                 category = category.replace(/[*"']/g, '').trim();
-                if (category.length > 25) {
-                    category = category.substring(0, 25);
+                if (category.length > 20) {
+                    category = category.substring(0, 20);
                 }
                 
                 return category || 'Other';
@@ -901,7 +901,19 @@ Reply with ONLY the category name:`
             window.open(u.startsWith('http') ? u : 'https://' + u, '_blank');
         };
 
-        startBtn.addEventListener('click', startCamera);
+        // Load saved API key from localStorage
+        const savedKey = localStorage.getItem('openrouter_api_key');
+        if (savedKey) {
+            apiKeyInput.value = savedKey;
+        }
+        
+        // Save API key when starting
+        startBtn.addEventListener('click', () => {
+            if (apiKeyInput.value.trim()) {
+                localStorage.setItem('openrouter_api_key', apiKeyInput.value.trim());
+            }
+            startCamera();
+        });
     </script>
 </body>
 </html>
