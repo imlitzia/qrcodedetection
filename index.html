@@ -4,11 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>QR Code Detector</title>
-    <!-- Using zxing library for better multi-QR detection -->
-    <script src="https://unpkg.com/@aspect-ratio/core"></script>
-    <script src="https://unpkg.com/@aspect-ratio/core"></script>
     <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
-    <script src="https://unpkg.com/@aspect-ratio/core"></script>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
         * {
@@ -357,7 +353,6 @@
             display: none !important;
         }
 
-        /* Toast notification */
         .toast {
             position: fixed;
             bottom: 20px;
@@ -471,8 +466,7 @@
         let lastTime = performance.now();
         let totalScanned = 0;
         let detectedQRs = new Map();
-        let activeQRs = new Map(); // Changed to Map to store location data
-        let lastDetectionTime = 0;
+        let activeQRs = new Map();
         let cachedResults = [];
         let cacheTimeout = 0;
 
@@ -489,14 +483,11 @@
 
         async function startCamera() {
             try {
-                // Try to get higher resolution for better detection
                 const constraints = {
                     video: {
                         facingMode: 'environment',
                         width: { ideal: 1920, min: 1280 },
-                        height: { ideal: 1080, min: 720 },
-                        focusMode: 'continuous',
-                        exposureMode: 'continuous'
+                        height: { ideal: 1080, min: 720 }
                     }
                 };
 
@@ -520,146 +511,130 @@
             }
         }
 
-        // Enhanced image preprocessing for better QR detection
-        function preprocessImage(imageData) {
-            const data = imageData.data;
+        // Mask out a detected QR code region by filling it with gray
+        function maskQRRegion(imageData, location, padding = 20) {
             const width = imageData.width;
-            const height = imageData.height;
+            const data = imageData.data;
             
-            // Convert to grayscale and enhance contrast
-            for (let i = 0; i < data.length; i += 4) {
-                // Grayscale
-                const gray = data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114;
-                
-                // Contrast enhancement
-                let enhanced = ((gray - 128) * 1.5) + 128;
-                enhanced = Math.max(0, Math.min(255, enhanced));
-                
-                data[i] = enhanced;
-                data[i + 1] = enhanced;
-                data[i + 2] = enhanced;
+            // Get bounding box with padding
+            const minX = Math.max(0, Math.floor(Math.min(
+                location.topLeftCorner.x,
+                location.bottomLeftCorner.x
+            )) - padding);
+            const maxX = Math.min(width, Math.ceil(Math.max(
+                location.topRightCorner.x,
+                location.bottomRightCorner.x
+            )) + padding);
+            const minY = Math.max(0, Math.floor(Math.min(
+                location.topLeftCorner.y,
+                location.topRightCorner.y
+            )) - padding);
+            const maxY = Math.min(imageData.height, Math.ceil(Math.max(
+                location.bottomLeftCorner.y,
+                location.bottomRightCorner.y
+            )) + padding);
+            
+            // Fill the region with gray (neutral color that won't be detected as QR)
+            for (let y = minY; y < maxY; y++) {
+                for (let x = minX; x < maxX; x++) {
+                    const idx = (y * width + x) * 4;
+                    data[idx] = 128;     // R
+                    data[idx + 1] = 128; // G
+                    data[idx + 2] = 128; // B
+                }
             }
-            
-            return imageData;
         }
 
-        // Scan a region of the image
-        function scanRegion(imageData, offsetX, offsetY, regionWidth, regionHeight, fullWidth, fullHeight) {
-            const code = jsQR(imageData.data, imageData.width, imageData.height, {
-                inversionAttempts: 'attemptBoth'
-            });
-            
-            if (code && code.data) {
-                // Adjust coordinates back to full image
-                const scaleX = fullWidth / regionWidth;
-                const scaleY = fullHeight / regionHeight;
-                
-                return {
-                    data: code.data,
-                    location: {
-                        topLeftCorner: {
-                            x: code.location.topLeftCorner.x * scaleX + offsetX,
-                            y: code.location.topLeftCorner.y * scaleY + offsetY
-                        },
-                        topRightCorner: {
-                            x: code.location.topRightCorner.x * scaleX + offsetX,
-                            y: code.location.topRightCorner.y * scaleY + offsetY
-                        },
-                        bottomRightCorner: {
-                            x: code.location.bottomRightCorner.x * scaleX + offsetX,
-                            y: code.location.bottomRightCorner.y * scaleY + offsetY
-                        },
-                        bottomLeftCorner: {
-                            x: code.location.bottomLeftCorner.x * scaleX + offsetX,
-                            y: code.location.bottomLeftCorner.y * scaleY + offsetY
-                        }
-                    }
-                };
-            }
-            return null;
-        }
-
-        // Multi-pass QR detection for better accuracy
-        function detectQRCodes(imageData, width, height) {
+        // Detect multiple QR codes by scanning and masking
+        function detectMultipleQRCodes(originalImageData, width, height) {
             const results = [];
             const foundData = new Set();
+            const maxQRCodes = 10; // Maximum QR codes to detect
             
-            // Pass 1: Full image scan with original data
-            let code = jsQR(imageData.data, width, height, {
-                inversionAttempts: 'attemptBoth'
-            });
-            
-            if (code && code.data && !foundData.has(code.data)) {
-                foundData.add(code.data);
-                results.push({
-                    data: code.data,
-                    location: code.location
-                });
-            }
-            
-            // Pass 2: Enhanced contrast scan
-            const enhancedData = new ImageData(
-                new Uint8ClampedArray(imageData.data),
+            // Create a working copy of the image data
+            let workingData = new ImageData(
+                new Uint8ClampedArray(originalImageData.data),
                 width,
                 height
             );
-            preprocessImage(enhancedData);
             
-            code = jsQR(enhancedData.data, width, height, {
-                inversionAttempts: 'attemptBoth'
-            });
-            
-            if (code && code.data && !foundData.has(code.data)) {
-                foundData.add(code.data);
-                results.push({
-                    data: code.data,
-                    location: code.location
+            // Keep scanning until no more QR codes found or max reached
+            for (let i = 0; i < maxQRCodes; i++) {
+                const code = jsQR(workingData.data, width, height, {
+                    inversionAttempts: 'attemptBoth'
                 });
+                
+                if (code && code.data) {
+                    // Check if we already found this QR code (by data content)
+                    if (!foundData.has(code.data)) {
+                        foundData.add(code.data);
+                        results.push({
+                            data: code.data,
+                            location: code.location
+                        });
+                    }
+                    
+                    // Mask out this QR code region so we can find others
+                    maskQRRegion(workingData, code.location, 30);
+                } else {
+                    // No more QR codes found
+                    break;
+                }
             }
             
-            // Pass 3: Scan quadrants for multiple QR codes
-            const quadrants = [
-                { x: 0, y: 0, w: width * 0.6, h: height * 0.6 },
-                { x: width * 0.4, y: 0, w: width * 0.6, h: height * 0.6 },
-                { x: 0, y: height * 0.4, w: width * 0.6, h: height * 0.6 },
-                { x: width * 0.4, y: height * 0.4, w: width * 0.6, h: height * 0.6 },
-                { x: width * 0.2, y: height * 0.2, w: width * 0.6, h: height * 0.6 }
+            // Also try scanning different regions/quadrants for QR codes that might be missed
+            const regions = [
+                { x: 0, y: 0, w: 0.55, h: 0.55 },           // Top-left
+                { x: 0.45, y: 0, w: 0.55, h: 0.55 },        // Top-right
+                { x: 0, y: 0.45, w: 0.55, h: 0.55 },        // Bottom-left
+                { x: 0.45, y: 0.45, w: 0.55, h: 0.55 },     // Bottom-right
+                { x: 0.25, y: 0.25, w: 0.5, h: 0.5 },       // Center
+                { x: 0, y: 0.25, w: 0.5, h: 0.5 },          // Left
+                { x: 0.5, y: 0.25, w: 0.5, h: 0.5 },        // Right
+                { x: 0.25, y: 0, w: 0.5, h: 0.5 },          // Top
+                { x: 0.25, y: 0.5, w: 0.5, h: 0.5 },        // Bottom
             ];
             
-            for (const quad of quadrants) {
-                procCtx.drawImage(video, 
-                    quad.x, quad.y, quad.w, quad.h,
-                    0, 0, width, height
-                );
-                const quadData = procCtx.getImageData(0, 0, width, height);
+            for (const region of regions) {
+                if (results.length >= maxQRCodes) break;
                 
-                code = jsQR(quadData.data, width, height, {
+                const rx = Math.floor(region.x * width);
+                const ry = Math.floor(region.y * height);
+                const rw = Math.floor(region.w * width);
+                const rh = Math.floor(region.h * height);
+                
+                // Extract region
+                procCtx.drawImage(video, rx, ry, rw, rh, 0, 0, rw, rh);
+                const regionData = procCtx.getImageData(0, 0, rw, rh);
+                
+                const code = jsQR(regionData.data, rw, rh, {
                     inversionAttempts: 'attemptBoth'
                 });
                 
                 if (code && code.data && !foundData.has(code.data)) {
                     foundData.add(code.data);
-                    // Adjust location back to original coordinates
-                    const scaleX = quad.w / width;
-                    const scaleY = quad.h / height;
+                    
+                    // Scale location back to full image coordinates
+                    const scaleX = 1;
+                    const scaleY = 1;
                     results.push({
                         data: code.data,
                         location: {
                             topLeftCorner: {
-                                x: code.location.topLeftCorner.x * scaleX + quad.x,
-                                y: code.location.topLeftCorner.y * scaleY + quad.y
+                                x: code.location.topLeftCorner.x * scaleX + rx,
+                                y: code.location.topLeftCorner.y * scaleY + ry
                             },
                             topRightCorner: {
-                                x: code.location.topRightCorner.x * scaleX + quad.x,
-                                y: code.location.topRightCorner.y * scaleY + quad.y
+                                x: code.location.topRightCorner.x * scaleX + rx,
+                                y: code.location.topRightCorner.y * scaleY + ry
                             },
                             bottomRightCorner: {
-                                x: code.location.bottomRightCorner.x * scaleX + quad.x,
-                                y: code.location.bottomRightCorner.y * scaleY + quad.y
+                                x: code.location.bottomRightCorner.x * scaleX + rx,
+                                y: code.location.bottomRightCorner.y * scaleY + ry
                             },
                             bottomLeftCorner: {
-                                x: code.location.bottomLeftCorner.x * scaleX + quad.x,
-                                y: code.location.bottomLeftCorner.y * scaleY + quad.y
+                                x: code.location.bottomLeftCorner.x * scaleX + rx,
+                                y: code.location.bottomLeftCorner.y * scaleY + ry
                             }
                         }
                     });
@@ -682,18 +657,19 @@
             }
 
             if (video.readyState === video.HAVE_ENOUGH_DATA) {
+                // Draw video to canvas
                 ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
                 
                 // Get image data for processing
                 const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
                 
-                // Detect QR codes with multi-pass approach
-                const detectedCodes = detectQRCodes(imageData, canvas.width, canvas.height);
+                // Detect multiple QR codes
+                const detectedCodes = detectMultipleQRCodes(imageData, canvas.width, canvas.height);
                 
-                // Update cache if we found codes, or use cache if recent
+                // Update cache
                 if (detectedCodes.length > 0) {
                     cachedResults = detectedCodes;
-                    cacheTimeout = 10; // Keep for 10 frames
+                    cacheTimeout = 8;
                 } else if (cacheTimeout > 0) {
                     cacheTimeout--;
                 } else {
@@ -702,7 +678,7 @@
                 
                 const resultsToShow = cachedResults;
                 
-                // Clear and redraw
+                // Clear and redraw video
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
                 ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
                 
@@ -715,7 +691,6 @@
                     drawQROverlay(result, index + 1);
                 });
 
-                // Update active QRs
                 activeQRs = currentFrameQRs;
                 
                 // Update count display
@@ -752,8 +727,18 @@
         function drawQROverlay(result, index) {
             const loc = result.location;
             
+            // Colors for different QR codes
+            const colors = [
+                { fill: 'rgba(0, 255, 180, 0.25)', stroke: '#00ffb4', corner: '#00c8ff' },
+                { fill: 'rgba(255, 180, 0, 0.25)', stroke: '#ffb400', corner: '#ff8800' },
+                { fill: 'rgba(180, 0, 255, 0.25)', stroke: '#b400ff', corner: '#8800ff' },
+                { fill: 'rgba(0, 180, 255, 0.25)', stroke: '#00b4ff', corner: '#0088ff' },
+                { fill: 'rgba(255, 0, 180, 0.25)', stroke: '#ff00b4', corner: '#ff0088' },
+            ];
+            const color = colors[(index - 1) % colors.length];
+            
             // Draw filled polygon
-            ctx.fillStyle = 'rgba(0, 255, 180, 0.2)';
+            ctx.fillStyle = color.fill;
             ctx.beginPath();
             ctx.moveTo(loc.topLeftCorner.x, loc.topLeftCorner.y);
             ctx.lineTo(loc.topRightCorner.x, loc.topRightCorner.y);
@@ -763,19 +748,19 @@
             ctx.fill();
 
             // Draw border
-            ctx.strokeStyle = '#00ffb4';
+            ctx.strokeStyle = color.stroke;
             ctx.lineWidth = 4;
             ctx.stroke();
 
             // Draw corners
             const corners = [loc.topLeftCorner, loc.topRightCorner, loc.bottomRightCorner, loc.bottomLeftCorner];
             corners.forEach(corner => {
-                ctx.fillStyle = '#00c8ff';
+                ctx.fillStyle = color.corner;
                 ctx.beginPath();
                 ctx.arc(corner.x, corner.y, 10, 0, Math.PI * 2);
                 ctx.fill();
-                ctx.strokeStyle = '#008faa';
-                ctx.lineWidth = 3;
+                ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+                ctx.lineWidth = 2;
                 ctx.stroke();
             });
 
@@ -783,9 +768,9 @@
             const labelX = Math.min(loc.topLeftCorner.x, loc.bottomLeftCorner.x);
             const labelY = Math.min(loc.topLeftCorner.y, loc.topRightCorner.y) - 10;
             
-            ctx.fillStyle = '#00ffb4';
+            ctx.fillStyle = color.stroke;
             ctx.fillRect(labelX, labelY - 30, 90, 35);
-            ctx.fillStyle = '#0a0a0f';
+            ctx.fillStyle = '#000';
             ctx.font = 'bold 18px JetBrains Mono, monospace';
             ctx.fillText(`QR #${index}`, labelX + 10, labelY - 5);
         }
