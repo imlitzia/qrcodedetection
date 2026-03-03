@@ -466,9 +466,11 @@
         let lastTime = performance.now();
         let totalScanned = 0;
         let detectedQRs = new Map();
-        let activeQRs = new Map();
+        let activeQRs = [];  // Array to store all currently visible QR codes
         let cachedResults = [];
         let cacheTimeout = 0;
+        let scanCounter = 0;  // Counter to skip frames for performance
+        const SCAN_EVERY_N_FRAMES = 3;  // Only scan every 3rd frame
 
         function showToast(message) {
             toast.textContent = message;
@@ -486,8 +488,9 @@
                 const constraints = {
                     video: {
                         facingMode: 'environment',
-                        width: { ideal: 1920, min: 1280 },
-                        height: { ideal: 1080, min: 720 }
+                        width: { ideal: 1280, min: 640 },
+                        height: { ideal: 720, min: 480 },
+                        frameRate: { ideal: 30 }
                     }
                 };
 
@@ -701,18 +704,22 @@
                 ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
                 
                 // Process and draw detected QR codes
-                const currentFrameQRs = new Map();
+                const currentFrameQRs = [];
                 
                 resultsToShow.forEach((result, index) => {
                     processQRCode(result, index + 1);
-                    currentFrameQRs.set(result.data, result.location);
+                    currentFrameQRs.push({
+                        data: result.data,
+                        location: result.location,
+                        index: index + 1
+                    });
                     drawQROverlay(result, index + 1);
                 });
 
                 activeQRs = currentFrameQRs;
                 
-                // Update count display
-                const count = currentFrameQRs.size;
+                // Update count display - show actual number of QR codes detected
+                const count = currentFrameQRs.length;
                 qrCountEl.textContent = count;
                 qrCountEl.classList.toggle('zero', count === 0);
 
@@ -721,10 +728,10 @@
                     const posKey = item.dataset.posKey;
                     // Check if any active QR matches this position
                     let isActive = false;
-                    activeQRs.forEach((loc, data) => {
-                        const centerX = Math.round((loc.topLeftCorner.x + loc.bottomRightCorner.x) / 2);
-                        const centerY = Math.round((loc.topLeftCorner.y + loc.bottomRightCorner.y) / 2);
-                        const activeKey = `${Math.floor(centerX/50)}_${Math.floor(centerY/50)}_${data.substring(0,20)}`;
+                    activeQRs.forEach(qr => {
+                        const centerX = Math.round((qr.location.topLeftCorner.x + qr.location.bottomRightCorner.x) / 2);
+                        const centerY = Math.round((qr.location.topLeftCorner.y + qr.location.bottomRightCorner.y) / 2);
+                        const activeKey = `${Math.floor(centerX/50)}_${Math.floor(centerY/50)}_${qr.data.substring(0,20)}`;
                         if (activeKey === posKey) isActive = true;
                     });
                     item.classList.toggle('active', isActive);
