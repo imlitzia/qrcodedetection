@@ -109,6 +109,7 @@
             color: var(--text-dim);
         }
         .api-status.connected { color: var(--accent); }
+        .api-status.error { color: var(--warning); font-weight: 600; }
         
         /* Category Input */
         .category-inputs {
@@ -600,7 +601,7 @@
                         <input type="password" id="apiKey" class="api-input" placeholder="OpenRouter API Key (optional)">
                         <button id="saveApiBtn" class="api-btn">Save</button>
                     </div>
-                    <div id="apiStatus" class="api-status">API key enables AI categorization for unknown items</div>
+                    <div id="apiStatus" class="api-status error">⚠️ API key is REQUIRED to use this system</div>
                 </div>
                 
                 <!-- Category Inputs -->
@@ -810,13 +811,13 @@
             openRouterApiKey = apiKeyInput.value.trim();
             if (openRouterApiKey) {
                 localStorage.setItem('openRouterApiKey', openRouterApiKey);
-                apiStatus.textContent = '✓ API key saved';
+                apiStatus.textContent = '✓ API key saved - Ready to scan!';
                 apiStatus.className = 'api-status connected';
-                showToast('API key saved!');
+                showToast('✓ API key saved!');
             } else {
                 localStorage.removeItem('openRouterApiKey');
-                apiStatus.textContent = 'API key enables AI categorization';
-                apiStatus.className = 'api-status';
+                apiStatus.textContent = '⚠️ API key is REQUIRED to use this system';
+                apiStatus.className = 'api-status error';
             }
         }
 
@@ -826,6 +827,15 @@
         }
 
         async function beginScanning() {
+            // Check if API key is provided
+            if (!openRouterApiKey) {
+                showToast('⚠️ API key required!');
+                apiKeyInput.focus();
+                apiStatus.textContent = '⚠️ API key is required to use this system';
+                apiStatus.className = 'api-status error';
+                return;
+            }
+            
             // Collect expected counts
             expectedCounts = {};
             document.querySelectorAll('.category-count-input').forEach(input => {
@@ -895,114 +905,156 @@
             showResults();
         }
 
-        function generateRecommendations() {
+        // Generate AI-powered recommendations
+        async function generateAIRecommendations() {
+            // Build inventory summary for AI
+            const inventorySummary = [];
+            Object.entries(CATEGORIES).forEach(([key, cat]) => {
+                const expected = expectedCounts[key] || 0;
+                const scanned = scannedCounts[key] || 0;
+                if (expected > 0 || scanned > 0) {
+                    inventorySummary.push({
+                        category: cat.name,
+                        expected: expected,
+                        scanned: scanned,
+                        difference: scanned - expected
+                    });
+                }
+            });
+            
+            // Get scanned items list
+            const scannedItems = [];
+            detectedQRs.forEach((qr, data) => {
+                scannedItems.push({
+                    data: data,
+                    category: CATEGORIES[qr.category]?.name || 'Unknown'
+                });
+            });
+
+            try {
+                const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${openRouterApiKey}`,
+                        'HTTP-Referer': window.location.href,
+                        'X-Title': 'Coffee Shop Inventory Tracker'
+                    },
+                    body: JSON.stringify({
+                        model: 'meta-llama/llama-3.2-3b-instruct:free',
+                        messages: [
+                            {
+                                role: 'system',
+                                content: `You are an AI inventory management assistant for a coffee shop. Analyze the inventory data and provide actionable recommendations.
+
+Your response MUST be a valid JSON array with this exact structure:
+[
+  {
+    "type": "critical|warning|info|success",
+    "icon": "emoji",
+    "action": "SHORT ACTION TITLE",
+    "detail": "Detailed explanation and recommendation"
+  }
+]
+
+Types to use:
+- "critical": Out of stock or less than 25% inventory (use 🚨 or ⚠️)
+- "warning": Low stock (25-50%) or overstocked (use 📦 or 📈)  
+- "info": Minor adjustments needed (use 📋 or ➕)
+- "success": Inventory is at target level (use ✅ or 🎉)
+
+Provide specific, actionable advice like:
+- "Order X units immediately"
+- "Stop ordering until stock depletes"
+- "Schedule delivery for next week"
+- "Review supplier contract"
+
+Return ONLY the JSON array, no other text.`
+                            },
+                            { 
+                                role: 'user', 
+                                content: `Analyze this coffee shop inventory and provide recommendations:
+
+INVENTORY SUMMARY:
+${JSON.stringify(inventorySummary, null, 2)}
+
+TOTAL EXPECTED: ${totalExpectedItems}
+TOTAL SCANNED: ${detectedQRs.size}
+
+SCANNED ITEMS:
+${scannedItems.map(i => `- ${i.category}: ${i.data}`).join('\n')}
+
+Provide your recommendations as a JSON array.`
+                            }
+                        ],
+                        max_tokens: 500,
+                        temperature: 0.3
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error('API request failed');
+                }
+
+                const data = await response.json();
+                let content = data.choices[0]?.message?.content?.trim() || '[]';
+                
+                // Try to extract JSON from the response
+                const jsonMatch = content.match(/\[[\s\S]*\]/);
+                if (jsonMatch) {
+                    content = jsonMatch[0];
+                }
+                
+                const recommendations = JSON.parse(content);
+                return recommendations;
+            } catch (error) {
+                console.error('AI recommendations error:', error);
+                // Fallback to basic recommendations if AI fails
+                return generateBasicRecommendations();
+            }
+        }
+        
+        // Fallback basic recommendations (used if AI fails)
+        function generateBasicRecommendations() {
             const recommendations = [];
             
             Object.entries(CATEGORIES).forEach(([key, cat]) => {
                 const expected = expectedCounts[key] || 0;
                 const scanned = scannedCounts[key] || 0;
                 const diff = scanned - expected;
-                const percentFilled = expected > 0 ? (scanned / expected) * 100 : 0;
                 
                 if (expected > 0 || scanned > 0) {
                     if (scanned === 0 && expected > 0) {
-                        // Out of stock - critical
                         recommendations.push({
                             type: 'critical',
                             icon: '🚨',
-                            category: key,
                             action: `OUT OF STOCK: ${cat.name}`,
-                            detail: `Expected ${expected} items but found 0. Immediate restocking required!`,
-                            priority: 1
+                            detail: `Expected ${expected} items but found 0. Immediate restocking required!`
                         });
-                    } else if (diff < 0 && percentFilled < 25) {
-                        // Very low stock - critical
-                        recommendations.push({
-                            type: 'critical',
-                            icon: '⚠️',
-                            category: key,
-                            action: `CRITICALLY LOW: ${cat.name}`,
-                            detail: `Only ${scanned}/${expected} items (${Math.round(percentFilled)}%). Urgent refill needed - order immediately!`,
-                            priority: 2
-                        });
-                    } else if (diff < 0 && percentFilled < 50) {
-                        // Low stock - warning
+                    } else if (diff < 0) {
                         recommendations.push({
                             type: 'warning',
                             icon: '📦',
-                            category: key,
                             action: `LOW STOCK: ${cat.name}`,
-                            detail: `${scanned}/${expected} items (${Math.round(percentFilled)}%). Schedule restocking soon.`,
-                            priority: 3
+                            detail: `${scanned}/${expected} items. Missing ${Math.abs(diff)} - please restock.`
                         });
-                    } else if (diff < 0) {
-                        // Slightly below - info
-                        recommendations.push({
-                            type: 'info',
-                            icon: '📋',
-                            category: key,
-                            action: `RESTOCK NEEDED: ${cat.name}`,
-                            detail: `Missing ${Math.abs(diff)} item(s). Add to next order.`,
-                            priority: 4
-                        });
-                    } else if (diff > expected * 0.5 && expected > 0) {
-                        // Significantly overstocked - warning
+                    } else if (diff > 0) {
                         recommendations.push({
                             type: 'warning',
                             icon: '📈',
-                            category: key,
                             action: `OVERSTOCKED: ${cat.name}`,
-                            detail: `${scanned}/${expected} items (+${diff} extra). Pause ordering and review demand.`,
-                            priority: 5
+                            detail: `${scanned}/${expected} items (+${diff} extra). Consider reducing orders.`
                         });
-                    } else if (diff > 0) {
-                        // Slightly over - info
-                        recommendations.push({
-                            type: 'info',
-                            icon: '➕',
-                            category: key,
-                            action: `EXCESS INVENTORY: ${cat.name}`,
-                            detail: `${diff} extra item(s). Consider adjusting expected count or reducing orders.`,
-                            priority: 6
-                        });
-                    } else if (diff === 0 && expected > 0) {
-                        // Perfect - success
+                    } else {
                         recommendations.push({
                             type: 'success',
                             icon: '✅',
-                            category: key,
                             action: `OPTIMAL: ${cat.name}`,
-                            detail: `All ${expected} items accounted for. Inventory is at target level.`,
-                            priority: 7
+                            detail: `All ${expected} items accounted for.`
                         });
                     }
                 }
             });
-            
-            // Sort by priority
-            recommendations.sort((a, b) => a.priority - b.priority);
-            
-            // Add overall recommendation
-            const totalScanned = detectedQRs.size;
-            const overallPercent = totalExpectedItems > 0 ? (totalScanned / totalExpectedItems) * 100 : 0;
-            
-            if (overallPercent === 100) {
-                recommendations.unshift({
-                    type: 'success',
-                    icon: '🎉',
-                    action: 'INVENTORY COMPLETE',
-                    detail: 'All expected items have been scanned. No action required.',
-                    priority: 0
-                });
-            } else if (overallPercent < 50) {
-                recommendations.unshift({
-                    type: 'critical',
-                    icon: '🔴',
-                    action: 'MAJOR SHORTAGE DETECTED',
-                    detail: `Only ${Math.round(overallPercent)}% of inventory found. Review supply chain immediately.`,
-                    priority: 0
-                });
-            }
             
             return recommendations;
         }
@@ -1066,27 +1118,65 @@
             document.getElementById('summaryMissing').textContent = totalMissing;
             
             // Generate and display AI recommendations
-            const recommendations = generateRecommendations();
             const aiRecommendationsEl = document.getElementById('aiRecommendations');
-            aiRecommendationsEl.innerHTML = '';
-            
-            recommendations.forEach(rec => {
-                const item = document.createElement('div');
-                item.className = `recommendation-item ${rec.type}`;
-                item.innerHTML = `
-                    <span class="recommendation-icon">${rec.icon}</span>
+            aiRecommendationsEl.innerHTML = `
+                <div class="recommendation-item info">
+                    <span class="recommendation-icon">🤖</span>
                     <div class="recommendation-content">
-                        <div class="recommendation-action">${rec.action}</div>
-                        <div class="recommendation-detail">${rec.detail}</div>
+                        <div class="recommendation-action">AI ANALYZING...</div>
+                        <div class="recommendation-detail">Please wait while AI generates recommendations...</div>
+                    </div>
+                </div>
+            `;
+            
+            // Fetch AI recommendations asynchronously
+            generateAIRecommendations().then(recommendations => {
+                aiRecommendationsEl.innerHTML = '';
+                
+                if (recommendations.length === 0) {
+                    aiRecommendationsEl.innerHTML = `
+                        <div class="recommendation-item success">
+                            <span class="recommendation-icon">✅</span>
+                            <div class="recommendation-content">
+                                <div class="recommendation-action">NO ISSUES DETECTED</div>
+                                <div class="recommendation-detail">Inventory appears to be in good condition.</div>
+                            </div>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                recommendations.forEach(rec => {
+                    const item = document.createElement('div');
+                    item.className = `recommendation-item ${rec.type || 'info'}`;
+                    item.innerHTML = `
+                        <span class="recommendation-icon">${rec.icon || '📋'}</span>
+                        <div class="recommendation-content">
+                            <div class="recommendation-action">${rec.action || 'Recommendation'}</div>
+                            <div class="recommendation-detail">${rec.detail || ''}</div>
+                        </div>
+                    `;
+                    aiRecommendationsEl.appendChild(item);
+                });
+            }).catch(error => {
+                console.error('Error displaying recommendations:', error);
+                aiRecommendationsEl.innerHTML = `
+                    <div class="recommendation-item warning">
+                        <span class="recommendation-icon">⚠️</span>
+                        <div class="recommendation-content">
+                            <div class="recommendation-action">AI UNAVAILABLE</div>
+                            <div class="recommendation-detail">Could not generate AI recommendations. Please check your API key.</div>
+                        </div>
                     </div>
                 `;
-                aiRecommendationsEl.appendChild(item);
             });
         }
 
-        function downloadCSV() {
+        async function downloadCSV() {
+            showToast('🤖 Generating AI report...');
+            
             // Generate CSV content
-            let csv = 'QR Inventory Report\n';
+            let csv = 'Coffee Shop Inventory Report\n';
             csv += `Generated: ${new Date().toISOString()}\n\n`;
             
             // Summary section
@@ -1125,12 +1215,16 @@
             csv += '\nAI RECOMMENDATIONS\n';
             csv += 'Priority,Type,Action,Detail\n';
             
-            const recommendations = generateRecommendations();
-            recommendations.forEach((rec, idx) => {
-                const escapedAction = rec.action.replace(/"/g, '""');
-                const escapedDetail = rec.detail.replace(/"/g, '""');
-                csv += `${idx + 1},"${rec.type}","${escapedAction}","${escapedDetail}"\n`;
-            });
+            try {
+                const recommendations = await generateAIRecommendations();
+                recommendations.forEach((rec, idx) => {
+                    const escapedAction = (rec.action || '').replace(/"/g, '""');
+                    const escapedDetail = (rec.detail || '').replace(/"/g, '""');
+                    csv += `${idx + 1},"${rec.type || 'info'}","${escapedAction}","${escapedDetail}"\n`;
+                });
+            } catch (error) {
+                csv += '1,"error","AI Unavailable","Could not generate AI recommendations"\n';
+            }
             
             // Create and download file
             const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -1138,13 +1232,13 @@
             const link = document.createElement('a');
             const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
             link.href = url;
-            link.download = `inventory-report-${timestamp}.csv`;
+            link.download = `coffee-inventory-${timestamp}.csv`;
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
             URL.revokeObjectURL(url);
             
-            showToast('CSV downloaded!');
+            showToast('📥 CSV downloaded!');
         }
 
         function resetAndStartNew() {
@@ -1198,76 +1292,74 @@
             });
         }
 
-        // Quick local categorization for coffee shop inventory
-        function quickCategorize(qrData) {
-            const data = qrData.toLowerCase();
-            
-            // Milk products - dairy, milk brands, milk types
-            if (/milk|dairy|oat\s*milk|almond\s*milk|soy\s*milk|whole\s*milk|skim|2%|lactose|cream|half.*half|latte|condensed|evaporated|organic\s*milk|fresh\s*milk|pasteurized/i.test(data)) return 'milk';
-            
-            // Coffee beans - coffee, espresso, roast, beans
-            if (/coffee|bean|espresso|arabica|robusta|roast|ground|brew|decaf|caffeine|latte\s*blend|mocha|columbian|ethiopian|sumatra|dark\s*roast|medium\s*roast|light\s*roast|whole\s*bean/i.test(data)) return 'coffee_beans';
-            
-            // Cups - cups, lids, sleeves, containers
-            if (/cup|lid|sleeve|container|tumbler|mug|paper\s*cup|plastic\s*cup|disposable|to-go|takeaway|hot\s*cup|cold\s*cup|straw|sippy|drinkware|oz\s*cup|\d+\s*oz/i.test(data)) return 'cups';
-            
-            return null;
-        }
-
+        // AI-powered categorization for coffee shop inventory
         async function categorizeWithLLM(qrData, qrIndex) {
-            const quickResult = quickCategorize(qrData);
-            if (quickResult) {
-                const catInfo = CATEGORIES[quickResult];
-                showToast(`${catInfo.icon} ${catInfo.name}`);
-                return quickResult;
+            // API key is required - this should be checked before scanning starts
+            if (!openRouterApiKey) {
+                showToast('⚠️ API key required!');
+                return 'other';
             }
-            
-            if (!openRouterApiKey) return 'other';
 
             try {
+                showToast('🤖 AI analyzing...');
+                
                 const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                         'Authorization': `Bearer ${openRouterApiKey}`,
                         'HTTP-Referer': window.location.href,
-                        'X-Title': 'QR Inventory Tracker'
+                        'X-Title': 'Coffee Shop Inventory Tracker'
                     },
                     body: JSON.stringify({
                         model: 'meta-llama/llama-3.2-3b-instruct:free',
                         messages: [
                             {
                                 role: 'system',
-                                content: `You are categorizing coffee shop inventory items. Respond with ONLY ONE of these exact words based on the QR code content:
-- milk (for any dairy products, milk alternatives like oat/almond/soy milk, cream, half-and-half)
-- coffee_beans (for coffee beans, ground coffee, espresso, any coffee products)
-- cups (for cups, lids, sleeves, straws, containers, drinkware)
-- other (if it doesn't fit the above categories)
+                                content: `You are an AI assistant for a coffee shop inventory system. Your job is to categorize scanned items into one of these categories:
 
-Just respond with the single category word, nothing else.`
+CATEGORIES:
+1. milk - Any dairy products including: whole milk, skim milk, 2% milk, oat milk, almond milk, soy milk, coconut milk, cream, half-and-half, condensed milk, evaporated milk, lactose-free milk
+2. coffee_beans - Any coffee products including: coffee beans, ground coffee, espresso beans, arabica, robusta, dark roast, medium roast, light roast, decaf coffee, cold brew concentrate
+3. cups - Any drinkware and accessories including: paper cups, plastic cups, lids, sleeves, straws, tumblers, mugs, to-go containers, hot cups, cold cups, any size cups (8oz, 12oz, 16oz, etc.)
+4. other - Items that don't fit any of the above categories
+
+INSTRUCTIONS:
+- Analyze the QR code content/text provided
+- Determine which category the item belongs to
+- Respond with ONLY the category name (milk, coffee_beans, cups, or other)
+- Do not include any explanation, just the single word category`
                             },
-                            { role: 'user', content: `Categorize this item: ${qrData}` }
+                            { role: 'user', content: `Categorize this inventory item based on its QR code content: "${qrData}"` }
                         ],
-                        max_tokens: 10,
+                        max_tokens: 15,
                         temperature: 0
                     })
                 });
 
-                if (!response.ok) return 'other';
+                if (!response.ok) {
+                    console.error('API error:', response.status);
+                    showToast('⚠️ AI error, marked as other');
+                    return 'other';
+                }
 
                 const data = await response.json();
                 let category = data.choices[0]?.message?.content?.trim().toLowerCase().replace(/[^a-z_]/g, '') || 'other';
                 
-                // Handle variations
+                // Handle variations in AI response
                 if (category === 'coffeebeans' || category === 'coffee') category = 'coffee_beans';
                 if (category === 'cup') category = 'cups';
                 
                 if (CATEGORIES[category]) {
-                    showToast(`${CATEGORIES[category].icon} ${CATEGORIES[category].name}`);
+                    showToast(`🤖 AI: ${CATEGORIES[category].icon} ${CATEGORIES[category].name}`);
                     return category;
                 }
+                
+                showToast('🤖 AI: 📦 Uncategorized');
                 return 'other';
             } catch (error) {
+                console.error('Categorization error:', error);
+                showToast('⚠️ AI connection error');
                 return 'other';
             }
         }
