@@ -453,8 +453,66 @@
             }
         });
 
+        // Quick local categorization based on known domains
+        function quickCategorize(qrData) {
+            const data = qrData.toLowerCase();
+            
+            // Food & Beverage
+            if (/starbucks|mcdonald|burger|pizza|domino|kfc|subway|dunkin|chipotle|wendys|taco|coffee|restaurant|food|eat|ubereats|doordash|grubhub/i.test(data)) {
+                return 'food';
+            }
+            // Technology
+            if (/lenovo|apple\.com|microsoft|samsung|dell|hp\.com|intel|nvidia|amd\.com|cisco|ibm\.com|oracle|adobe|github|stackoverflow/i.test(data)) {
+                return 'technology';
+            }
+            // Shopping
+            if (/amazon|ebay|walmart|alibaba|shopify|etsy|target\.com|bestbuy|costco|ikea/i.test(data)) {
+                return 'shopping';
+            }
+            // Social Media
+            if (/facebook|instagram|twitter|linkedin|tiktok|snapchat|pinterest|reddit|discord|whatsapp|telegram/i.test(data)) {
+                return 'social';
+            }
+            // Finance
+            if (/paypal|visa\.com|mastercard|chase|bank|citibank|wellsfargo|coinbase|crypto|bitcoin|venmo|stripe/i.test(data)) {
+                return 'finance';
+            }
+            // Entertainment
+            if (/netflix|spotify|youtube|twitch|hulu|disney|hbo|primevideo|soundcloud|gaming|steam|playstation|xbox/i.test(data)) {
+                return 'entertainment';
+            }
+            // Travel
+            if (/airbnb|booking\.com|expedia|tripadvisor|airline|united\.com|delta\.com|hotel|marriott|hilton|kayak/i.test(data)) {
+                return 'travel';
+            }
+            // Education
+            if (/coursera|udemy|edx|khanacademy|university|\.edu|school|learn|tutorial|academic/i.test(data)) {
+                return 'education';
+            }
+            // Health
+            if (/cvs|walgreens|pharmacy|hospital|clinic|health|medical|doctor|webmd|mayoclinic|fitness|gym/i.test(data)) {
+                return 'health';
+            }
+            // News
+            if (/cnn|bbc|nytimes|reuters|news|foxnews|washingtonpost|guardian|huffpost|npr\.org/i.test(data)) {
+                return 'news';
+            }
+            
+            return null; // Unknown - will use LLM
+        }
+
         // Categorize QR code using LLM
         async function categorizeWithLLM(qrData, qrIndex) {
+            // First try quick local categorization
+            const quickResult = quickCategorize(qrData);
+            if (quickResult) {
+                const catInfo = CATEGORIES[quickResult];
+                showToast(`QR #${qrIndex}: ${catInfo.icon} ${catInfo.name}`);
+                console.log(`[QR #${qrIndex}] Quick categorized as: ${quickResult}`);
+                return quickResult;
+            }
+            
+            // If no API key, return other
             if (!openRouterApiKey) {
                 showToast('No API key - showing as Other');
                 return 'other';
@@ -476,28 +534,30 @@
                         messages: [
                             {
                                 role: 'system',
-                                content: `You are a categorization assistant. Analyze the QR code content and respond with ONLY ONE of these category names (lowercase, no explanation):
-- food (restaurants, cafes, food delivery, beverages like Starbucks, McDonald's, etc.)
-- technology (tech companies, software, hardware, IT like Lenovo, Apple, Microsoft, etc.)
-- shopping (e-commerce, retail stores like Amazon, eBay, Walmart, etc.)
-- social (social media platforms like Facebook, Instagram, Twitter, etc.)
-- finance (banks, payment, cryptocurrency like PayPal, Visa, etc.)
-- entertainment (movies, music, games, streaming like Netflix, Spotify, etc.)
-- travel (airlines, hotels, booking like Airbnb, Booking.com, etc.)
-- education (schools, courses, learning platforms like Coursera, etc.)
-- health (hospitals, pharmacies, fitness like CVS, etc.)
-- news (news websites, media outlets like CNN, BBC, etc.)
-- other (anything that doesn't fit above categories)
+                                content: `Categorize the URL/text into exactly ONE category. Reply with ONLY the category word:
+food, technology, shopping, social, finance, entertainment, travel, education, health, news, other
 
-Respond with ONLY the category name, nothing else.`
+Examples:
+- starbucks.com → food
+- lenovo.com → technology
+- amazon.com → shopping
+- facebook.com → social
+- paypal.com → finance
+- netflix.com → entertainment
+- airbnb.com → travel
+- coursera.org → education
+- cvs.com → health
+- cnn.com → news
+
+Reply with just ONE word from: food, technology, shopping, social, finance, entertainment, travel, education, health, news, other`
                             },
                             {
                                 role: 'user',
-                                content: `Categorize this QR code content: ${qrData}`
+                                content: qrData
                             }
                         ],
-                        max_tokens: 20,
-                        temperature: 0.1
+                        max_tokens: 10,
+                        temperature: 0
                     })
                 });
 
@@ -511,7 +571,10 @@ Respond with ONLY the category name, nothing else.`
                 const data = await response.json();
                 console.log(`[QR #${qrIndex}] LLM response:`, data);
                 
-                const category = data.choices[0]?.message?.content?.trim().toLowerCase() || 'other';
+                let category = data.choices[0]?.message?.content?.trim().toLowerCase() || 'other';
+                
+                // Clean up response - extract just the category word
+                category = category.replace(/[^a-z]/g, '');
                 
                 // Validate category
                 if (CATEGORIES[category]) {
@@ -521,6 +584,7 @@ Respond with ONLY the category name, nothing else.`
                 }
                 
                 console.log(`[QR #${qrIndex}] Unknown category: ${category}, defaulting to other`);
+                showToast(`QR #${qrIndex}: 📎 Other`);
                 return 'other';
             } catch (error) {
                 console.error('LLM categorization error:', error);
