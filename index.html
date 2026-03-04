@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>QR Inventory Tracker</title>
+    <title>Coffee Shop Inventory Tracker</title>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -586,8 +586,8 @@
 <body>
     <div class="container">
         <header>
-            <h1>⬡ QR Inventory Tracker</h1>
-            <p class="subtitle">AI-powered inventory management</p>
+            <h1>☕ Coffee Inventory</h1>
+            <p class="subtitle">Milk • Coffee Beans • Cups</p>
         </header>
 
         <!-- SCREEN 1: Setup -->
@@ -751,19 +751,12 @@
         let scannedCounts = {};
         let totalExpectedItems = 0;
 
-        // Category definitions
+        // Category definitions - Coffee Shop Inventory
         const CATEGORIES = {
-            'food': { name: 'Food & Beverage', icon: '🍔', color: '#ff6b6b' },
-            'technology': { name: 'Technology', icon: '💻', color: '#4dabf7' },
-            'shopping': { name: 'Shopping', icon: '🛒', color: '#ff9f43' },
-            'social': { name: 'Social Media', icon: '📱', color: '#a855f7' },
-            'finance': { name: 'Finance', icon: '💰', color: '#22c55e' },
-            'entertainment': { name: 'Entertainment', icon: '🎬', color: '#ec4899' },
-            'travel': { name: 'Travel', icon: '✈️', color: '#06b6d4' },
-            'education': { name: 'Education', icon: '📚', color: '#8b5cf6' },
-            'health': { name: 'Health', icon: '🏥', color: '#10b981' },
-            'news': { name: 'News & Media', icon: '📰', color: '#6366f1' },
-            'other': { name: 'Other', icon: '📎', color: '#64748b' }
+            'milk': { name: 'Milk', icon: '🥛', color: '#f8fafc' },
+            'coffee_beans': { name: 'Coffee Beans', icon: '☕', color: '#8b5a2b' },
+            'cups': { name: 'Cups', icon: '🥤', color: '#06b6d4' },
+            'other': { name: 'Uncategorized', icon: '📦', color: '#64748b' }
         };
 
         // Initialize
@@ -1205,20 +1198,18 @@
             });
         }
 
-        // Quick local categorization
+        // Quick local categorization for coffee shop inventory
         function quickCategorize(qrData) {
             const data = qrData.toLowerCase();
             
-            if (/starbucks|mcdonald|burger|pizza|domino|kfc|subway|dunkin|chipotle|wendys|taco|coffee|restaurant|food|eat|ubereats|doordash|grubhub|cafe/i.test(data)) return 'food';
-            if (/lenovo|apple\.com|microsoft|samsung|dell|hp\.com|intel|nvidia|amd\.com|cisco|ibm\.com|oracle|adobe|github|stackoverflow|tech/i.test(data)) return 'technology';
-            if (/amazon|ebay|walmart|alibaba|shopify|etsy|target\.com|bestbuy|costco|ikea|shop/i.test(data)) return 'shopping';
-            if (/facebook|instagram|twitter|linkedin|tiktok|snapchat|pinterest|reddit|discord|whatsapp|telegram/i.test(data)) return 'social';
-            if (/paypal|visa\.com|mastercard|chase|bank|citibank|wellsfargo|coinbase|crypto|bitcoin|venmo|stripe/i.test(data)) return 'finance';
-            if (/netflix|spotify|youtube|twitch|hulu|disney|hbo|primevideo|soundcloud|gaming|steam|playstation|xbox/i.test(data)) return 'entertainment';
-            if (/airbnb|booking\.com|expedia|tripadvisor|airline|united\.com|delta\.com|hotel|marriott|hilton|kayak|travel/i.test(data)) return 'travel';
-            if (/coursera|udemy|edx|khanacademy|university|\.edu|school|learn|tutorial|academic/i.test(data)) return 'education';
-            if (/cvs|walgreens|pharmacy|hospital|clinic|health|medical|doctor|webmd|mayoclinic|fitness|gym/i.test(data)) return 'health';
-            if (/cnn|bbc|nytimes|reuters|news|foxnews|washingtonpost|guardian|huffpost|npr\.org/i.test(data)) return 'news';
+            // Milk products - dairy, milk brands, milk types
+            if (/milk|dairy|oat\s*milk|almond\s*milk|soy\s*milk|whole\s*milk|skim|2%|lactose|cream|half.*half|latte|condensed|evaporated|organic\s*milk|fresh\s*milk|pasteurized/i.test(data)) return 'milk';
+            
+            // Coffee beans - coffee, espresso, roast, beans
+            if (/coffee|bean|espresso|arabica|robusta|roast|ground|brew|decaf|caffeine|latte\s*blend|mocha|columbian|ethiopian|sumatra|dark\s*roast|medium\s*roast|light\s*roast|whole\s*bean/i.test(data)) return 'coffee_beans';
+            
+            // Cups - cups, lids, sleeves, containers
+            if (/cup|lid|sleeve|container|tumbler|mug|paper\s*cup|plastic\s*cup|disposable|to-go|takeaway|hot\s*cup|cold\s*cup|straw|sippy|drinkware|oz\s*cup|\d+\s*oz/i.test(data)) return 'cups';
             
             return null;
         }
@@ -1247,9 +1238,15 @@
                         messages: [
                             {
                                 role: 'system',
-                                content: `Categorize into ONE word: food, technology, shopping, social, finance, entertainment, travel, education, health, news, other`
+                                content: `You are categorizing coffee shop inventory items. Respond with ONLY ONE of these exact words based on the QR code content:
+- milk (for any dairy products, milk alternatives like oat/almond/soy milk, cream, half-and-half)
+- coffee_beans (for coffee beans, ground coffee, espresso, any coffee products)
+- cups (for cups, lids, sleeves, straws, containers, drinkware)
+- other (if it doesn't fit the above categories)
+
+Just respond with the single category word, nothing else.`
                             },
-                            { role: 'user', content: qrData }
+                            { role: 'user', content: `Categorize this item: ${qrData}` }
                         ],
                         max_tokens: 10,
                         temperature: 0
@@ -1259,7 +1256,11 @@
                 if (!response.ok) return 'other';
 
                 const data = await response.json();
-                let category = data.choices[0]?.message?.content?.trim().toLowerCase().replace(/[^a-z]/g, '') || 'other';
+                let category = data.choices[0]?.message?.content?.trim().toLowerCase().replace(/[^a-z_]/g, '') || 'other';
+                
+                // Handle variations
+                if (category === 'coffeebeans' || category === 'coffee') category = 'coffee_beans';
+                if (category === 'cup') category = 'cups';
                 
                 if (CATEGORIES[category]) {
                     showToast(`${CATEGORIES[category].icon} ${CATEGORIES[category].name}`);
