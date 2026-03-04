@@ -1292,14 +1292,46 @@ Provide your recommendations as a JSON array.`
             });
         }
 
+        // Local keyword-based categorization (used as primary + AI verification)
+        function localCategorize(qrData) {
+            const data = qrData.toLowerCase();
+            
+            // Milk products
+            if (/milk|dairy|oat\s*milk|almond\s*milk|soy\s*milk|whole\s*milk|skim|2%|lactose|cream|half.*half|condensed|evaporated|organic\s*milk|fresh\s*milk|pasteurized|coconut\s*milk/i.test(data)) {
+                return 'milk';
+            }
+            
+            // Coffee beans
+            if (/coffee|bean|espresso|arabica|robusta|roast|ground|brew|decaf|caffeine|mocha|columbian|ethiopian|sumatra|dark\s*roast|medium\s*roast|light\s*roast|whole\s*bean/i.test(data)) {
+                return 'coffee_beans';
+            }
+            
+            // Cups
+            if (/cup|lid|sleeve|container|tumbler|mug|paper\s*cup|plastic\s*cup|disposable|to-go|takeaway|hot\s*cup|cold\s*cup|straw|sippy|drinkware|oz\s*cup|\d+\s*oz/i.test(data)) {
+                return 'cups';
+            }
+            
+            return null; // Unknown - needs AI
+        }
+
         // AI-powered categorization for coffee shop inventory
         async function categorizeWithLLM(qrData, qrIndex) {
-            // API key is required - this should be checked before scanning starts
+            // API key is required
             if (!openRouterApiKey) {
                 showToast('⚠️ API key required!');
                 return 'other';
             }
 
+            // First try local categorization for speed
+            const localResult = localCategorize(qrData);
+            if (localResult) {
+                showToast(`${CATEGORIES[localResult].icon} ${CATEGORIES[localResult].name}`);
+                // Still call AI in background to verify, but return local result immediately
+                verifyWithAI(qrData, localResult);
+                return localResult;
+            }
+
+            // If local categorization fails, use AI
             try {
                 showToast('🤖 AI analyzing...');
                 
@@ -1316,51 +1348,87 @@ Provide your recommendations as a JSON array.`
                         messages: [
                             {
                                 role: 'system',
-                                content: `You are an AI assistant for a coffee shop inventory system. Your job is to categorize scanned items into one of these categories:
+                                content: `You are categorizing coffee shop inventory. Respond with ONLY one word: milk, coffee_beans, cups, or other.
 
-CATEGORIES:
-1. milk - Any dairy products including: whole milk, skim milk, 2% milk, oat milk, almond milk, soy milk, coconut milk, cream, half-and-half, condensed milk, evaporated milk, lactose-free milk
-2. coffee_beans - Any coffee products including: coffee beans, ground coffee, espresso beans, arabica, robusta, dark roast, medium roast, light roast, decaf coffee, cold brew concentrate
-3. cups - Any drinkware and accessories including: paper cups, plastic cups, lids, sleeves, straws, tumblers, mugs, to-go containers, hot cups, cold cups, any size cups (8oz, 12oz, 16oz, etc.)
-4. other - Items that don't fit any of the above categories
-
-INSTRUCTIONS:
-- Analyze the QR code content/text provided
-- Determine which category the item belongs to
-- Respond with ONLY the category name (milk, coffee_beans, cups, or other)
-- Do not include any explanation, just the single word category`
+milk = dairy products, any type of milk
+coffee_beans = coffee beans, ground coffee, espresso
+cups = cups, lids, sleeves, straws, containers`
                             },
-                            { role: 'user', content: `Categorize this inventory item based on its QR code content: "${qrData}"` }
+                            { role: 'user', content: qrData }
                         ],
-                        max_tokens: 15,
+                        max_tokens: 10,
                         temperature: 0
                     })
                 });
 
                 if (!response.ok) {
-                    console.error('API error:', response.status);
-                    showToast('⚠️ AI error, marked as other');
+                    const errorText = await response.text();
+                    console.error('API error:', response.status, errorText);
+                    showToast(`⚠️ API Error: ${response.status}`);
                     return 'other';
                 }
 
                 const data = await response.json();
-                let category = data.choices[0]?.message?.content?.trim().toLowerCase().replace(/[^a-z_]/g, '') || 'other';
+                console.log('AI Response:', data);
+                
+                let category = data.choices?.[0]?.message?.content?.trim().toLowerCase().replace(/[^a-z_]/g, '') || 'other';
                 
                 // Handle variations in AI response
                 if (category === 'coffeebeans' || category === 'coffee') category = 'coffee_beans';
                 if (category === 'cup') category = 'cups';
                 
                 if (CATEGORIES[category]) {
-                    showToast(`🤖 AI: ${CATEGORIES[category].icon} ${CATEGORIES[category].name}`);
+                    showToast(`🤖 ${CATEGORIES[category].icon} ${CATEGORIES[category].name}`);
                     return category;
                 }
                 
-                showToast('🤖 AI: 📦 Uncategorized');
+                showToast('📦 Uncategorized');
                 return 'other';
             } catch (error) {
                 console.error('Categorization error:', error);
-                showToast('⚠️ AI connection error');
+                showToast(`⚠️ Error: ${error.message}`);
                 return 'other';
+            }
+        }
+        
+        // Background AI verification (optional enhancement)
+        async function verifyWithAI(qrData, localCategory) {
+            // This runs in background and logs any discrepancies
+            try {
+                const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${openRouterApiKey}`,
+                        'HTTP-Referer': window.location.href,
+                        'X-Title': 'Coffee Shop Inventory Tracker'
+                    },
+                    body: JSON.stringify({
+                        model: 'meta-llama/llama-3.2-3b-instruct:free',
+                        messages: [
+                            {
+                                role: 'system',
+                                content: `Categorize: milk, coffee_beans, cups, or other. Reply with ONE word only.`
+                            },
+                            { role: 'user', content: qrData }
+                        ],
+                        max_tokens: 10,
+                        temperature: 0
+                    })
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    let aiCategory = data.choices?.[0]?.message?.content?.trim().toLowerCase().replace(/[^a-z_]/g, '') || 'other';
+                    if (aiCategory === 'coffeebeans' || aiCategory === 'coffee') aiCategory = 'coffee_beans';
+                    if (aiCategory === 'cup') aiCategory = 'cups';
+                    
+                    if (aiCategory !== localCategory) {
+                        console.log(`AI verification: Local said "${localCategory}", AI said "${aiCategory}" for "${qrData}"`);
+                    }
+                }
+            } catch (e) {
+                // Ignore background verification errors
             }
         }
 
