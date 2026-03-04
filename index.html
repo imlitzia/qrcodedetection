@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Multi-QR Detector</title>
+    <title>QR Inventory Tracker</title>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -16,6 +16,7 @@
             --text: #e8e8e8;
             --text-dim: #888;
             --warning: #ff6b6b;
+            --success: #22c55e;
             --border: #2a2a3a;
         }
         body {
@@ -51,11 +52,27 @@
             margin-top: 4px;
         }
         
-        /* API Key Section */
-        .api-section {
+        /* Screen Management */
+        .screen { display: none; }
+        .screen.active { display: block; }
+        
+        /* Setup Screen */
+        .setup-section {
             max-width: 640px;
-            margin: 0 auto 15px;
+            margin: 0 auto;
             width: 100%;
+        }
+        .section-title {
+            font-size: 0.85rem;
+            color: var(--accent);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid var(--border);
+        }
+        .api-section {
+            margin-bottom: 20px;
         }
         .api-input-group {
             display: flex;
@@ -92,8 +109,91 @@
             color: var(--text-dim);
         }
         .api-status.connected { color: var(--accent); }
-        .api-status.error { color: var(--warning); }
         
+        /* Category Input */
+        .category-inputs {
+            margin-top: 20px;
+        }
+        .category-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            margin-bottom: 8px;
+        }
+        .category-icon {
+            font-size: 1.5rem;
+            width: 40px;
+            text-align: center;
+        }
+        .category-name {
+            flex: 1;
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+        .category-count-input {
+            width: 70px;
+            padding: 8px 10px;
+            background: var(--bg-dark);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--accent);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 1rem;
+            font-weight: 700;
+            text-align: center;
+        }
+        .category-count-input:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+        
+        .total-expected {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px;
+            background: var(--bg-card);
+            border: 2px solid var(--accent);
+            border-radius: 10px;
+            margin-top: 15px;
+        }
+        .total-label {
+            font-size: 0.9rem;
+            font-weight: 600;
+        }
+        .total-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--accent);
+        }
+        
+        .begin-btn {
+            display: block;
+            width: 100%;
+            padding: 16px;
+            background: var(--accent);
+            color: var(--bg-dark);
+            border: none;
+            border-radius: 10px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 1rem;
+            font-weight: 700;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-top: 20px;
+        }
+        .begin-btn:disabled {
+            background: var(--border);
+            color: var(--text-dim);
+            cursor: not-allowed;
+        }
+        
+        /* Scanning Screen */
         .video-container {
             position: relative;
             width: 100%;
@@ -153,6 +253,33 @@
             letter-spacing: 1px;
             margin-top: 4px;
         }
+        
+        /* Progress Bar */
+        .progress-section {
+            max-width: 640px;
+            margin: 15px auto;
+            width: 100%;
+        }
+        .progress-bar {
+            height: 8px;
+            background: var(--border);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        .progress-fill {
+            height: 100%;
+            background: var(--accent);
+            border-radius: 4px;
+            transition: width 0.3s ease;
+        }
+        .progress-text {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.75rem;
+            margin-top: 6px;
+            color: var(--text-dim);
+        }
+        
         .results {
             flex: 1;
             margin-top: 12px;
@@ -160,7 +287,7 @@
             margin-left: auto;
             margin-right: auto;
             width: 100%;
-            max-height: 40vh;
+            max-height: 30vh;
             overflow-y: auto;
         }
         .results-header {
@@ -191,92 +318,180 @@
             background: var(--bg-card);
             border: 1px solid var(--border);
             border-radius: 10px;
-            padding: 12px;
+            padding: 10px 12px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
             animation: slideIn 0.2s ease-out;
-            transition: all 0.15s;
         }
         .qr-item.active {
             border-color: var(--accent);
-            box-shadow: 0 0 20px rgba(0, 255, 180, 0.25);
-            background: rgba(0, 255, 180, 0.05);
+            box-shadow: 0 0 15px rgba(0, 255, 180, 0.2);
         }
         @keyframes slideIn {
             from { opacity: 0; transform: translateX(-10px); }
             to { opacity: 1; transform: translateX(0); }
         }
-        .qr-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 8px;
-            flex-wrap: wrap;
-            gap: 6px;
-        }
-        .qr-badge {
-            background: var(--accent);
-            color: var(--bg-dark);
-            font-size: 0.65rem;
-            font-weight: 700;
-            padding: 3px 8px;
-            border-radius: 15px;
-        }
-        .qr-time { font-size: 0.65rem; color: var(--text-dim); }
-        
-        /* Category Badge */
-        .category-badge {
-            font-size: 0.6rem;
-            font-weight: 600;
-            padding: 3px 10px;
-            border-radius: 15px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-        .category-food { background: #ff6b6b; color: #fff; }
-        .category-technology { background: #4dabf7; color: #fff; }
-        .category-shopping { background: #ff9f43; color: #fff; }
-        .category-social { background: #a855f7; color: #fff; }
-        .category-finance { background: #22c55e; color: #fff; }
-        .category-entertainment { background: #ec4899; color: #fff; }
-        .category-travel { background: #06b6d4; color: #fff; }
-        .category-education { background: #8b5cf6; color: #fff; }
-        .category-health { background: #10b981; color: #fff; }
-        .category-news { background: #6366f1; color: #fff; }
-        .category-other { background: #64748b; color: #fff; }
-        .category-loading { 
-            background: var(--border); 
-            color: var(--text-dim);
-            animation: shimmer 1.5s infinite;
-        }
-        @keyframes shimmer {
-            0%, 100% { opacity: 0.5; }
-            50% { opacity: 1; }
-        }
-        
-        .qr-data {
-            font-size: 0.8rem;
-            word-break: break-all;
-            color: var(--text);
-            line-height: 1.4;
-            background: rgba(0, 0, 0, 0.3);
-            padding: 10px;
-            border-radius: 6px;
-            max-height: 50px;
-            overflow-y: auto;
-        }
-        .qr-actions { display: flex; gap: 6px; margin-top: 10px; }
-        .btn {
-            flex: 1;
-            padding: 8px 12px;
-            border: none;
-            border-radius: 6px;
-            font-family: 'JetBrains Mono', monospace;
+        .qr-item-icon { font-size: 1.2rem; }
+        .qr-item-info { flex: 1; min-width: 0; }
+        .qr-item-category {
             font-size: 0.7rem;
+            font-weight: 600;
+            color: var(--accent);
+        }
+        .qr-item-data {
+            font-size: 0.65rem;
+            color: var(--text-dim);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .qr-item-time {
+            font-size: 0.6rem;
+            color: var(--text-dim);
+        }
+        
+        .finish-btn {
+            display: block;
+            width: 100%;
+            max-width: 640px;
+            margin: 15px auto;
+            padding: 14px;
+            background: var(--accent-orange);
+            color: var(--bg-dark);
+            border: none;
+            border-radius: 10px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.9rem;
+            font-weight: 700;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+        
+        /* Results Screen */
+        .results-screen {
+            max-width: 640px;
+            margin: 0 auto;
+            width: 100%;
+        }
+        .summary-card {
+            background: var(--bg-card);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 15px;
+            border: 1px solid var(--border);
+        }
+        .summary-title {
+            font-size: 0.8rem;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 15px;
+        }
+        .summary-stats {
+            display: flex;
+            justify-content: space-around;
+            text-align: center;
+        }
+        .summary-stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+        }
+        .summary-stat-value.expected { color: var(--text-dim); }
+        .summary-stat-value.scanned { color: var(--accent); }
+        .summary-stat-value.missing { color: var(--warning); }
+        .summary-stat-value.extra { color: var(--accent-orange); }
+        .summary-stat-label {
+            font-size: 0.65rem;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            margin-top: 4px;
+        }
+        
+        .category-result {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            margin-bottom: 8px;
+        }
+        .category-result.complete {
+            border-color: var(--success);
+            background: rgba(34, 197, 94, 0.1);
+        }
+        .category-result.missing {
+            border-color: var(--warning);
+            background: rgba(255, 107, 107, 0.1);
+        }
+        .category-result.extra {
+            border-color: var(--accent-orange);
+            background: rgba(255, 159, 67, 0.1);
+        }
+        .category-result-icon {
+            font-size: 1.5rem;
+            width: 40px;
+            text-align: center;
+        }
+        .category-result-info { flex: 1; }
+        .category-result-name {
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+        .category-result-detail {
+            font-size: 0.7rem;
+            color: var(--text-dim);
+            margin-top: 2px;
+        }
+        .category-result-status {
+            text-align: right;
+        }
+        .category-result-count {
+            font-size: 1.2rem;
+            font-weight: 700;
+        }
+        .category-result-count.complete { color: var(--success); }
+        .category-result-count.missing { color: var(--warning); }
+        .category-result-count.extra { color: var(--accent-orange); }
+        .category-result-badge {
+            font-size: 0.6rem;
+            padding: 2px 8px;
+            border-radius: 10px;
+            margin-top: 4px;
+            display: inline-block;
+        }
+        .badge-complete { background: var(--success); color: #fff; }
+        .badge-missing { background: var(--warning); color: #fff; }
+        .badge-extra { background: var(--accent-orange); color: #000; }
+        
+        .action-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        .action-btn {
+            flex: 1;
+            padding: 14px;
+            border: none;
+            border-radius: 10px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
             font-weight: 600;
             cursor: pointer;
             text-transform: uppercase;
         }
-        .btn-primary { background: var(--accent); color: var(--bg-dark); }
-        .btn-secondary { background: var(--border); color: var(--text); }
+        .action-btn.primary {
+            background: var(--accent);
+            color: var(--bg-dark);
+        }
+        .action-btn.secondary {
+            background: var(--border);
+            color: var(--text);
+        }
+        
         .empty-state {
             text-align: center;
             padding: 30px 15px;
@@ -284,34 +499,7 @@
         }
         .empty-icon { font-size: 2.5rem; margin-bottom: 12px; opacity: 0.5; }
         .empty-text { font-size: 0.8rem; line-height: 1.5; }
-        .error-banner {
-            background: rgba(255, 107, 107, 0.1);
-            border: 1px solid var(--warning);
-            color: var(--warning);
-            padding: 12px;
-            border-radius: 10px;
-            text-align: center;
-            margin: 12px auto;
-            max-width: 640px;
-            font-size: 0.8rem;
-        }
-        .start-btn {
-            display: block;
-            width: 100%;
-            max-width: 640px;
-            margin: 15px auto;
-            padding: 16px;
-            background: var(--accent);
-            color: var(--bg-dark);
-            border: none;
-            border-radius: 10px;
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 1rem;
-            font-weight: 700;
-            cursor: pointer;
-            text-transform: uppercase;
-            letter-spacing: 2px;
-        }
+        
         .hidden { display: none !important; }
         .toast {
             position: fixed;
@@ -334,23 +522,40 @@
 <body>
     <div class="container">
         <header>
-            <h1>⬡ Smart QR Detector</h1>
-            <p class="subtitle">AI-powered QR categorization</p>
+            <h1>⬡ QR Inventory Tracker</h1>
+            <p class="subtitle">AI-powered inventory management</p>
         </header>
 
-        <!-- API Key Input -->
-        <div class="api-section">
-            <div class="api-input-group">
-                <input type="password" id="apiKey" class="api-input" placeholder="Enter OpenRouter API Key">
-                <button id="saveApiBtn" class="api-btn">Save</button>
+        <!-- SCREEN 1: Setup -->
+        <div id="setupScreen" class="screen active">
+            <div class="setup-section">
+                <!-- API Key -->
+                <div class="api-section">
+                    <div class="section-title">API Configuration</div>
+                    <div class="api-input-group">
+                        <input type="password" id="apiKey" class="api-input" placeholder="OpenRouter API Key (optional)">
+                        <button id="saveApiBtn" class="api-btn">Save</button>
+                    </div>
+                    <div id="apiStatus" class="api-status">API key enables AI categorization for unknown items</div>
+                </div>
+                
+                <!-- Category Inputs -->
+                <div class="category-inputs">
+                    <div class="section-title">Expected Inventory</div>
+                    <div id="categoryInputs"></div>
+                    
+                    <div class="total-expected">
+                        <span class="total-label">Total Expected Items</span>
+                        <span id="totalExpected" class="total-value">0</span>
+                    </div>
+                </div>
+                
+                <button id="beginBtn" class="begin-btn">Begin Scanning</button>
             </div>
-            <div id="apiStatus" class="api-status">Enter your OpenRouter API key to enable AI categorization</div>
         </div>
 
-        <button id="startBtn" class="start-btn">Start Camera</button>
-        <div id="errorBanner" class="error-banner hidden"></div>
-
-        <div id="videoSection" class="hidden">
+        <!-- SCREEN 2: Scanning -->
+        <div id="scanScreen" class="screen">
             <div class="video-container">
                 <video id="video" playsinline muted></video>
                 <svg id="overlay"></svg>
@@ -367,20 +572,63 @@
                 </div>
                 <div class="stat">
                     <div id="totalScanned" class="stat-value zero">0</div>
-                    <div class="stat-label">Total Found</div>
+                    <div class="stat-label">Scanned</div>
+                </div>
+            </div>
+            
+            <div class="progress-section">
+                <div class="progress-bar">
+                    <div id="progressFill" class="progress-fill" style="width: 0%"></div>
+                </div>
+                <div class="progress-text">
+                    <span id="progressScanned">0 scanned</span>
+                    <span id="progressExpected">of 0 expected</span>
                 </div>
             </div>
 
             <div class="results">
                 <div class="results-header">
                     <div class="live-dot"></div>
-                    Detected QR Codes
+                    Scanned Items
                 </div>
                 <div id="qrList" class="qr-list">
                     <div class="empty-state">
                         <div class="empty-icon">📷</div>
                         <div class="empty-text">Point camera at QR codes</div>
                     </div>
+                </div>
+            </div>
+            
+            <button id="finishBtn" class="finish-btn">Finish Scanning</button>
+        </div>
+
+        <!-- SCREEN 3: Results -->
+        <div id="resultsScreen" class="screen">
+            <div class="results-screen">
+                <div class="summary-card">
+                    <div class="summary-title">Inventory Summary</div>
+                    <div class="summary-stats">
+                        <div>
+                            <div id="summaryExpected" class="summary-stat-value expected">0</div>
+                            <div class="summary-stat-label">Expected</div>
+                        </div>
+                        <div>
+                            <div id="summaryScanned" class="summary-stat-value scanned">0</div>
+                            <div class="summary-stat-label">Scanned</div>
+                        </div>
+                        <div>
+                            <div id="summaryMissing" class="summary-stat-value missing">0</div>
+                            <div class="summary-stat-label">Missing</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="section-title">Category Breakdown</div>
+                <div id="categoryResults"></div>
+                
+                <div class="action-buttons">
+                    <button id="newScanBtn" class="action-btn primary">New Scan</button>
+                    <button id="exportBtn" class="action-btn secondary">Export</button>
                 </div>
             </div>
         </div>
@@ -392,11 +640,16 @@
     <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
     
     <script>
+        // DOM Elements
+        const setupScreen = document.getElementById('setupScreen');
+        const scanScreen = document.getElementById('scanScreen');
+        const resultsScreen = document.getElementById('resultsScreen');
         const video = document.getElementById('video');
         const overlay = document.getElementById('overlay');
-        const startBtn = document.getElementById('startBtn');
-        const videoSection = document.getElementById('videoSection');
-        const errorBanner = document.getElementById('errorBanner');
+        const beginBtn = document.getElementById('beginBtn');
+        const finishBtn = document.getElementById('finishBtn');
+        const newScanBtn = document.getElementById('newScanBtn');
+        const exportBtn = document.getElementById('exportBtn');
         const qrCountEl = document.getElementById('qrCount');
         const fpsEl = document.getElementById('fps');
         const totalScannedEl = document.getElementById('totalScanned');
@@ -405,41 +658,86 @@
         const apiKeyInput = document.getElementById('apiKey');
         const saveApiBtn = document.getElementById('saveApiBtn');
         const apiStatus = document.getElementById('apiStatus');
+        const categoryInputsEl = document.getElementById('categoryInputs');
+        const totalExpectedEl = document.getElementById('totalExpected');
+        const progressFill = document.getElementById('progressFill');
+        const progressScanned = document.getElementById('progressScanned');
+        const progressExpected = document.getElementById('progressExpected');
 
+        // State
         let scanning = false;
         let scanCount = 0;
         let lastTime = performance.now();
-        let totalScanned = 0;
         let detectedQRs = new Map();
         let activeQRs = new Map();
         let canvas, ctx;
-        let regionCanvas, regionCtx;
         let openRouterApiKey = localStorage.getItem('openRouterApiKey') || '';
+        let expectedCounts = {};
+        let scannedCounts = {};
+        let totalExpectedItems = 0;
 
         // Category definitions
         const CATEGORIES = {
-            'food': { name: 'Food & Beverage', class: 'category-food', icon: '🍔' },
-            'technology': { name: 'Technology', class: 'category-technology', icon: '💻' },
-            'shopping': { name: 'Shopping', class: 'category-shopping', icon: '🛒' },
-            'social': { name: 'Social Media', class: 'category-social', icon: '📱' },
-            'finance': { name: 'Finance', class: 'category-finance', icon: '💰' },
-            'entertainment': { name: 'Entertainment', class: 'category-entertainment', icon: '🎬' },
-            'travel': { name: 'Travel', class: 'category-travel', icon: '✈️' },
-            'education': { name: 'Education', class: 'category-education', icon: '📚' },
-            'health': { name: 'Health', class: 'category-health', icon: '🏥' },
-            'news': { name: 'News & Media', class: 'category-news', icon: '📰' },
-            'other': { name: 'Other', class: 'category-other', icon: '📎' }
+            'food': { name: 'Food & Beverage', icon: '🍔', color: '#ff6b6b' },
+            'technology': { name: 'Technology', icon: '💻', color: '#4dabf7' },
+            'shopping': { name: 'Shopping', icon: '🛒', color: '#ff9f43' },
+            'social': { name: 'Social Media', icon: '📱', color: '#a855f7' },
+            'finance': { name: 'Finance', icon: '💰', color: '#22c55e' },
+            'entertainment': { name: 'Entertainment', icon: '🎬', color: '#ec4899' },
+            'travel': { name: 'Travel', icon: '✈️', color: '#06b6d4' },
+            'education': { name: 'Education', icon: '📚', color: '#8b5cf6' },
+            'health': { name: 'Health', icon: '🏥', color: '#10b981' },
+            'news': { name: 'News & Media', icon: '📰', color: '#6366f1' },
+            'other': { name: 'Other', icon: '📎', color: '#64748b' }
         };
 
-        // Initialize API key from localStorage
-        if (openRouterApiKey) {
-            apiKeyInput.value = openRouterApiKey;
-            apiStatus.textContent = '✓ API key saved';
-            apiStatus.className = 'api-status connected';
+        // Initialize
+        function init() {
+            // Load API key
+            if (openRouterApiKey) {
+                apiKeyInput.value = openRouterApiKey;
+                apiStatus.textContent = '✓ API key saved';
+                apiStatus.className = 'api-status connected';
+            }
+            
+            // Create category inputs
+            createCategoryInputs();
+            
+            // Event listeners
+            saveApiBtn.addEventListener('click', saveApiKey);
+            beginBtn.addEventListener('click', beginScanning);
+            finishBtn.addEventListener('click', finishScanning);
+            newScanBtn.addEventListener('click', resetAndStartNew);
+            exportBtn.addEventListener('click', exportResults);
         }
 
-        // Save API key
-        saveApiBtn.addEventListener('click', () => {
+        function createCategoryInputs() {
+            categoryInputsEl.innerHTML = '';
+            Object.entries(CATEGORIES).forEach(([key, cat]) => {
+                const row = document.createElement('div');
+                row.className = 'category-row';
+                row.innerHTML = `
+                    <span class="category-icon">${cat.icon}</span>
+                    <span class="category-name">${cat.name}</span>
+                    <input type="number" class="category-count-input" 
+                           data-category="${key}" 
+                           min="0" value="0" 
+                           onchange="updateTotalExpected()">
+                `;
+                categoryInputsEl.appendChild(row);
+            });
+        }
+
+        window.updateTotalExpected = function() {
+            let total = 0;
+            document.querySelectorAll('.category-count-input').forEach(input => {
+                total += parseInt(input.value) || 0;
+            });
+            totalExpectedItems = total;
+            totalExpectedEl.textContent = total;
+        };
+
+        function saveApiKey() {
             openRouterApiKey = apiKeyInput.value.trim();
             if (openRouterApiKey) {
                 localStorage.setItem('openRouterApiKey', openRouterApiKey);
@@ -448,163 +746,41 @@
                 showToast('API key saved!');
             } else {
                 localStorage.removeItem('openRouterApiKey');
-                apiStatus.textContent = 'Enter your OpenRouter API key';
+                apiStatus.textContent = 'API key enables AI categorization';
                 apiStatus.className = 'api-status';
             }
-        });
-
-        // Quick local categorization based on known domains
-        function quickCategorize(qrData) {
-            const data = qrData.toLowerCase();
-            
-            // Food & Beverage
-            if (/starbucks|mcdonald|burger|pizza|domino|kfc|subway|dunkin|chipotle|wendys|taco|coffee|restaurant|food|eat|ubereats|doordash|grubhub/i.test(data)) {
-                return 'food';
-            }
-            // Technology
-            if (/lenovo|apple\.com|microsoft|samsung|dell|hp\.com|intel|nvidia|amd\.com|cisco|ibm\.com|oracle|adobe|github|stackoverflow/i.test(data)) {
-                return 'technology';
-            }
-            // Shopping
-            if (/amazon|ebay|walmart|alibaba|shopify|etsy|target\.com|bestbuy|costco|ikea/i.test(data)) {
-                return 'shopping';
-            }
-            // Social Media
-            if (/facebook|instagram|twitter|linkedin|tiktok|snapchat|pinterest|reddit|discord|whatsapp|telegram/i.test(data)) {
-                return 'social';
-            }
-            // Finance
-            if (/paypal|visa\.com|mastercard|chase|bank|citibank|wellsfargo|coinbase|crypto|bitcoin|venmo|stripe/i.test(data)) {
-                return 'finance';
-            }
-            // Entertainment
-            if (/netflix|spotify|youtube|twitch|hulu|disney|hbo|primevideo|soundcloud|gaming|steam|playstation|xbox/i.test(data)) {
-                return 'entertainment';
-            }
-            // Travel
-            if (/airbnb|booking\.com|expedia|tripadvisor|airline|united\.com|delta\.com|hotel|marriott|hilton|kayak/i.test(data)) {
-                return 'travel';
-            }
-            // Education
-            if (/coursera|udemy|edx|khanacademy|university|\.edu|school|learn|tutorial|academic/i.test(data)) {
-                return 'education';
-            }
-            // Health
-            if (/cvs|walgreens|pharmacy|hospital|clinic|health|medical|doctor|webmd|mayoclinic|fitness|gym/i.test(data)) {
-                return 'health';
-            }
-            // News
-            if (/cnn|bbc|nytimes|reuters|news|foxnews|washingtonpost|guardian|huffpost|npr\.org/i.test(data)) {
-                return 'news';
-            }
-            
-            return null; // Unknown - will use LLM
         }
 
-        // Categorize QR code using LLM
-        async function categorizeWithLLM(qrData, qrIndex) {
-            // First try quick local categorization
-            const quickResult = quickCategorize(qrData);
-            if (quickResult) {
-                const catInfo = CATEGORIES[quickResult];
-                showToast(`QR #${qrIndex}: ${catInfo.icon} ${catInfo.name}`);
-                console.log(`[QR #${qrIndex}] Quick categorized as: ${quickResult}`);
-                return quickResult;
-            }
-            
-            // If no API key, return other
-            if (!openRouterApiKey) {
-                showToast('No API key - showing as Other');
-                return 'other';
-            }
+        function showScreen(screenId) {
+            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+            document.getElementById(screenId).classList.add('active');
+        }
 
-            try {
-                console.log(`[QR #${qrIndex}] Sending to LLM: ${qrData.substring(0, 50)}...`);
-                
-                const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${openRouterApiKey}`,
-                        'HTTP-Referer': window.location.href,
-                        'X-Title': 'QR Code Detector'
-                    },
-                    body: JSON.stringify({
-                        model: 'meta-llama/llama-3.2-3b-instruct:free',
-                        messages: [
-                            {
-                                role: 'system',
-                                content: `Categorize the URL/text into exactly ONE category. Reply with ONLY the category word:
-food, technology, shopping, social, finance, entertainment, travel, education, health, news, other
-
-Examples:
-- starbucks.com → food
-- lenovo.com → technology
-- amazon.com → shopping
-- facebook.com → social
-- paypal.com → finance
-- netflix.com → entertainment
-- airbnb.com → travel
-- coursera.org → education
-- cvs.com → health
-- cnn.com → news
-
-Reply with just ONE word from: food, technology, shopping, social, finance, entertainment, travel, education, health, news, other`
-                            },
-                            {
-                                role: 'user',
-                                content: qrData
-                            }
-                        ],
-                        max_tokens: 10,
-                        temperature: 0
-                    })
-                });
-
-                if (!response.ok) {
-                    const errorText = await response.text();
-                    console.error('LLM API error:', response.status, errorText);
-                    showToast(`API Error: ${response.status}`);
-                    return 'other';
+        async function beginScanning() {
+            // Collect expected counts
+            expectedCounts = {};
+            document.querySelectorAll('.category-count-input').forEach(input => {
+                const cat = input.dataset.category;
+                const count = parseInt(input.value) || 0;
+                if (count > 0) {
+                    expectedCounts[cat] = count;
                 }
-
-                const data = await response.json();
-                console.log(`[QR #${qrIndex}] LLM response:`, data);
-                
-                let category = data.choices[0]?.message?.content?.trim().toLowerCase() || 'other';
-                
-                // Clean up response - extract just the category word
-                category = category.replace(/[^a-z]/g, '');
-                
-                // Validate category
-                if (CATEGORIES[category]) {
-                    const catInfo = CATEGORIES[category];
-                    showToast(`QR #${qrIndex}: ${catInfo.icon} ${catInfo.name}`);
-                    return category;
-                }
-                
-                console.log(`[QR #${qrIndex}] Unknown category: ${category}, defaulting to other`);
-                showToast(`QR #${qrIndex}: 📎 Other`);
-                return 'other';
-            } catch (error) {
-                console.error('LLM categorization error:', error);
-                showToast(`Error: ${error.message}`);
-                return 'other';
-            }
-        }
-
-        function showToast(msg) {
-            toast.textContent = msg;
-            toast.classList.add('show');
-            setTimeout(() => toast.classList.remove('show'), 1500);
-        }
-
-        function showError(msg) {
-            errorBanner.textContent = msg;
-            errorBanner.classList.remove('hidden');
-        }
-
-        async function startCamera() {
+            });
+            
+            // Reset scanned counts
+            scannedCounts = {};
+            Object.keys(CATEGORIES).forEach(cat => scannedCounts[cat] = 0);
+            detectedQRs.clear();
+            
+            // Update progress
+            progressExpected.textContent = `of ${totalExpectedItems} expected`;
+            progressScanned.textContent = '0 scanned';
+            progressFill.style.width = '0%';
+            
+            // Show scan screen
+            showScreen('scanScreen');
+            
+            // Start camera
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({
                     video: { 
@@ -617,14 +793,8 @@ Reply with just ONE word from: food, technology, shopping, social, finance, ente
                 video.srcObject = stream;
                 await video.play();
 
-                startBtn.classList.add('hidden');
-                videoSection.classList.remove('hidden');
-
                 canvas = document.createElement('canvas');
                 ctx = canvas.getContext('2d', { willReadFrequently: true });
-                
-                regionCanvas = document.createElement('canvas');
-                regionCtx = regionCanvas.getContext('2d', { willReadFrequently: true });
 
                 await new Promise(resolve => {
                     if (video.videoWidth > 0) resolve();
@@ -637,11 +807,205 @@ Reply with just ONE word from: food, technology, shopping, social, finance, ente
 
                 scanning = true;
                 scanLoop();
-
             } catch (err) {
                 console.error('Camera error:', err);
-                showError(`Camera access denied or not available. Error: ${err.message}`);
+                showToast(`Camera error: ${err.message}`);
+                showScreen('setupScreen');
             }
+        }
+
+        function finishScanning() {
+            scanning = false;
+            
+            // Stop camera
+            if (video.srcObject) {
+                video.srcObject.getTracks().forEach(track => track.stop());
+            }
+            
+            // Show results
+            showResults();
+        }
+
+        function showResults() {
+            showScreen('resultsScreen');
+            
+            // Calculate totals
+            let totalScanned = detectedQRs.size;
+            let totalMissing = 0;
+            
+            // Update summary
+            document.getElementById('summaryExpected').textContent = totalExpectedItems;
+            document.getElementById('summaryScanned').textContent = totalScanned;
+            
+            // Generate category results
+            const categoryResultsEl = document.getElementById('categoryResults');
+            categoryResultsEl.innerHTML = '';
+            
+            Object.entries(CATEGORIES).forEach(([key, cat]) => {
+                const expected = expectedCounts[key] || 0;
+                const scanned = scannedCounts[key] || 0;
+                const diff = scanned - expected;
+                
+                if (expected > 0 || scanned > 0) {
+                    let statusClass = 'complete';
+                    let badgeClass = 'badge-complete';
+                    let badgeText = '✓ Complete';
+                    let countClass = 'complete';
+                    
+                    if (diff < 0) {
+                        statusClass = 'missing';
+                        badgeClass = 'badge-missing';
+                        badgeText = `${Math.abs(diff)} Missing`;
+                        countClass = 'missing';
+                        totalMissing += Math.abs(diff);
+                    } else if (diff > 0) {
+                        statusClass = 'extra';
+                        badgeClass = 'badge-extra';
+                        badgeText = `+${diff} Extra`;
+                        countClass = 'extra';
+                    }
+                    
+                    const row = document.createElement('div');
+                    row.className = `category-result ${statusClass}`;
+                    row.innerHTML = `
+                        <span class="category-result-icon">${cat.icon}</span>
+                        <div class="category-result-info">
+                            <div class="category-result-name">${cat.name}</div>
+                            <div class="category-result-detail">Expected: ${expected}</div>
+                        </div>
+                        <div class="category-result-status">
+                            <div class="category-result-count ${countClass}">${scanned}</div>
+                            <span class="category-result-badge ${badgeClass}">${badgeText}</span>
+                        </div>
+                    `;
+                    categoryResultsEl.appendChild(row);
+                }
+            });
+            
+            document.getElementById('summaryMissing').textContent = totalMissing;
+        }
+
+        function resetAndStartNew() {
+            detectedQRs.clear();
+            activeQRs.clear();
+            qrListEl.innerHTML = `<div class="empty-state"><div class="empty-icon">📷</div><div class="empty-text">Point camera at QR codes</div></div>`;
+            totalScannedEl.textContent = '0';
+            showScreen('setupScreen');
+        }
+
+        function exportResults() {
+            let report = 'QR INVENTORY REPORT\n';
+            report += '===================\n\n';
+            report += `Date: ${new Date().toLocaleString()}\n\n`;
+            report += `Total Expected: ${totalExpectedItems}\n`;
+            report += `Total Scanned: ${detectedQRs.size}\n\n`;
+            report += 'CATEGORY BREAKDOWN:\n';
+            report += '-------------------\n';
+            
+            Object.entries(CATEGORIES).forEach(([key, cat]) => {
+                const expected = expectedCounts[key] || 0;
+                const scanned = scannedCounts[key] || 0;
+                if (expected > 0 || scanned > 0) {
+                    const diff = scanned - expected;
+                    let status = '✓ Complete';
+                    if (diff < 0) status = `⚠ ${Math.abs(diff)} Missing`;
+                    else if (diff > 0) status = `+ ${diff} Extra`;
+                    report += `${cat.icon} ${cat.name}: ${scanned}/${expected} - ${status}\n`;
+                }
+            });
+            
+            report += '\nSCANNED ITEMS:\n';
+            report += '--------------\n';
+            detectedQRs.forEach((qr, data) => {
+                const cat = CATEGORIES[qr.category];
+                report += `${cat.icon} [${cat.name}] ${data}\n`;
+            });
+            
+            // Copy to clipboard
+            navigator.clipboard.writeText(report).then(() => {
+                showToast('Report copied to clipboard!');
+            }).catch(() => {
+                // Fallback
+                const ta = document.createElement('textarea');
+                ta.value = report;
+                document.body.appendChild(ta);
+                ta.select();
+                document.execCommand('copy');
+                document.body.removeChild(ta);
+                showToast('Report copied!');
+            });
+        }
+
+        // Quick local categorization
+        function quickCategorize(qrData) {
+            const data = qrData.toLowerCase();
+            
+            if (/starbucks|mcdonald|burger|pizza|domino|kfc|subway|dunkin|chipotle|wendys|taco|coffee|restaurant|food|eat|ubereats|doordash|grubhub|cafe/i.test(data)) return 'food';
+            if (/lenovo|apple\.com|microsoft|samsung|dell|hp\.com|intel|nvidia|amd\.com|cisco|ibm\.com|oracle|adobe|github|stackoverflow|tech/i.test(data)) return 'technology';
+            if (/amazon|ebay|walmart|alibaba|shopify|etsy|target\.com|bestbuy|costco|ikea|shop/i.test(data)) return 'shopping';
+            if (/facebook|instagram|twitter|linkedin|tiktok|snapchat|pinterest|reddit|discord|whatsapp|telegram/i.test(data)) return 'social';
+            if (/paypal|visa\.com|mastercard|chase|bank|citibank|wellsfargo|coinbase|crypto|bitcoin|venmo|stripe/i.test(data)) return 'finance';
+            if (/netflix|spotify|youtube|twitch|hulu|disney|hbo|primevideo|soundcloud|gaming|steam|playstation|xbox/i.test(data)) return 'entertainment';
+            if (/airbnb|booking\.com|expedia|tripadvisor|airline|united\.com|delta\.com|hotel|marriott|hilton|kayak|travel/i.test(data)) return 'travel';
+            if (/coursera|udemy|edx|khanacademy|university|\.edu|school|learn|tutorial|academic/i.test(data)) return 'education';
+            if (/cvs|walgreens|pharmacy|hospital|clinic|health|medical|doctor|webmd|mayoclinic|fitness|gym/i.test(data)) return 'health';
+            if (/cnn|bbc|nytimes|reuters|news|foxnews|washingtonpost|guardian|huffpost|npr\.org/i.test(data)) return 'news';
+            
+            return null;
+        }
+
+        async function categorizeWithLLM(qrData, qrIndex) {
+            const quickResult = quickCategorize(qrData);
+            if (quickResult) {
+                const catInfo = CATEGORIES[quickResult];
+                showToast(`${catInfo.icon} ${catInfo.name}`);
+                return quickResult;
+            }
+            
+            if (!openRouterApiKey) return 'other';
+
+            try {
+                const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${openRouterApiKey}`,
+                        'HTTP-Referer': window.location.href,
+                        'X-Title': 'QR Inventory Tracker'
+                    },
+                    body: JSON.stringify({
+                        model: 'meta-llama/llama-3.2-3b-instruct:free',
+                        messages: [
+                            {
+                                role: 'system',
+                                content: `Categorize into ONE word: food, technology, shopping, social, finance, entertainment, travel, education, health, news, other`
+                            },
+                            { role: 'user', content: qrData }
+                        ],
+                        max_tokens: 10,
+                        temperature: 0
+                    })
+                });
+
+                if (!response.ok) return 'other';
+
+                const data = await response.json();
+                let category = data.choices[0]?.message?.content?.trim().toLowerCase().replace(/[^a-z]/g, '') || 'other';
+                
+                if (CATEGORIES[category]) {
+                    showToast(`${CATEGORIES[category].icon} ${CATEGORIES[category].name}`);
+                    return category;
+                }
+                return 'other';
+            } catch (error) {
+                return 'other';
+            }
+        }
+
+        function showToast(msg) {
+            toast.textContent = msg;
+            toast.classList.add('show');
+            setTimeout(() => toast.classList.remove('show'), 1500);
         }
 
         function detectMultipleQRCodes() {
@@ -689,70 +1053,7 @@ Reply with just ONE word from: food, technology, shopping, social, finance, ente
                 }
             }
 
-            const quadrants = [
-                { x: 0, y: 0, w: w * 0.55, h: h * 0.55 },
-                { x: w * 0.45, y: 0, w: w * 0.55, h: h * 0.55 },
-                { x: 0, y: h * 0.45, w: w * 0.55, h: h * 0.55 },
-                { x: w * 0.45, y: h * 0.45, w: w * 0.55, h: h * 0.55 },
-                { x: w * 0.2, y: h * 0.2, w: w * 0.6, h: h * 0.6 },
-                { x: 0, y: h * 0.25, w: w, h: h * 0.5 },
-                { x: w * 0.25, y: 0, w: w * 0.5, h: h },
-            ];
-
-            quadrants.forEach(q => {
-                const sx = Math.floor(q.x);
-                const sy = Math.floor(q.y);
-                const sw = Math.floor(Math.min(q.w, w - sx));
-                const sh = Math.floor(Math.min(q.h, h - sy));
-                
-                if (sw > 50 && sh > 50) {
-                    const regionData = ctx.getImageData(sx, sy, sw, sh);
-                    const result = jsQR(regionData.data, sw, sh, { inversionAttempts: 'dontInvert' });
-                    
-                    if (result && result.data && !results.has(result.data)) {
-                        result.location.topLeftCorner.x += sx;
-                        result.location.topLeftCorner.y += sy;
-                        result.location.topRightCorner.x += sx;
-                        result.location.topRightCorner.y += sy;
-                        result.location.bottomLeftCorner.x += sx;
-                        result.location.bottomLeftCorner.y += sy;
-                        result.location.bottomRightCorner.x += sx;
-                        result.location.bottomRightCorner.y += sy;
-                        results.set(result.data, result);
-                    }
-                }
-            });
-
-            if (results.size < 3) {
-                const enhanced = enhanceContrast(fullImageData);
-                const enhancedResult = jsQR(enhanced.data, w, h, { inversionAttempts: 'attemptBoth' });
-                if (enhancedResult && enhancedResult.data && !results.has(enhancedResult.data)) {
-                    results.set(enhancedResult.data, enhancedResult);
-                }
-            }
-
             return Array.from(results.values());
-        }
-
-        function enhanceContrast(imageData) {
-            const data = new Uint8ClampedArray(imageData.data);
-            
-            let min = 255, max = 0;
-            for (let i = 0; i < data.length; i += 4) {
-                const gray = (data[i] + data[i + 1] + data[i + 2]) / 3;
-                if (gray < min) min = gray;
-                if (gray > max) max = gray;
-            }
-            
-            const range = max - min || 1;
-            
-            for (let i = 0; i < data.length; i += 4) {
-                const gray = (data[i] + data[i + 1] + data[i + 2]) / 3;
-                const stretched = ((gray - min) / range) * 255;
-                data[i] = data[i + 1] = data[i + 2] = stretched;
-            }
-            
-            return { data, width: imageData.width, height: imageData.height };
         }
 
         function scanLoop() {
@@ -783,45 +1084,68 @@ Reply with just ONE word from: food, technology, shopping, social, finance, ente
             });
 
             activeQRs = currentActive;
-            updateStats(currentActive.size);
-            updateListStates();
+            qrCountEl.textContent = currentActive.size;
+            qrCountEl.classList.toggle('zero', currentActive.size === 0);
+            qrCountEl.classList.toggle('active', currentActive.size > 0);
 
             requestAnimationFrame(scanLoop);
         }
 
         async function processQR(data) {
             if (!detectedQRs.has(data)) {
-                totalScanned++;
-                totalScannedEl.textContent = totalScanned;
-                totalScannedEl.classList.remove('zero');
+                const qrIndex = detectedQRs.size + 1;
                 
-                // Add with loading category first
+                // Add with loading state
                 detectedQRs.set(data, {
                     data,
                     timestamp: new Date().toLocaleTimeString(),
-                    index: detectedQRs.size + 1,
-                    category: 'loading'
+                    index: qrIndex,
+                    category: 'other'
                 });
                 
-                updateQRList();
-                showToast(`QR #${detectedQRs.size} found!`);
+                // Categorize
+                const category = await categorizeWithLLM(data, qrIndex);
                 
-                // Categorize with LLM in background
-                const category = await categorizeWithLLM(data, detectedQRs.size);
-                
-                // Update category
+                // Update
                 const qrInfo = detectedQRs.get(data);
                 if (qrInfo) {
                     qrInfo.category = category;
-                    detectedQRs.set(data, qrInfo);
-                    updateQRList();
+                    scannedCounts[category] = (scannedCounts[category] || 0) + 1;
                 }
+                
+                updateScanUI();
             }
+        }
+
+        function updateScanUI() {
+            const total = detectedQRs.size;
+            totalScannedEl.textContent = total;
+            
+            // Update progress
+            const percent = totalExpectedItems > 0 ? Math.min(100, (total / totalExpectedItems) * 100) : 0;
+            progressFill.style.width = `${percent}%`;
+            progressScanned.textContent = `${total} scanned`;
+            
+            // Update list
+            qrListEl.innerHTML = '';
+            Array.from(detectedQRs.values()).reverse().forEach(qr => {
+                const cat = CATEGORIES[qr.category];
+                const item = document.createElement('div');
+                item.className = 'qr-item' + (activeQRs.has(qr.data) ? ' active' : '');
+                item.innerHTML = `
+                    <span class="qr-item-icon">${cat.icon}</span>
+                    <div class="qr-item-info">
+                        <div class="qr-item-category" style="color: ${cat.color}">${cat.name}</div>
+                        <div class="qr-item-data">${qr.data}</div>
+                    </div>
+                    <span class="qr-item-time">${qr.timestamp}</span>
+                `;
+                qrListEl.appendChild(item);
+            });
         }
 
         function drawOverlay(loc, index) {
             const ns = 'http://www.w3.org/2000/svg';
-            
             const colors = ['#00ffb4', '#ff9f43', '#ff6b9d', '#9d65ff', '#65d9ff', '#ffeb3b'];
             const color = colors[(index - 1) % colors.length];
             
@@ -843,8 +1167,6 @@ Reply with just ONE word from: food, technology, shopping, social, finance, ente
                 circle.setAttribute('cy', corner.y);
                 circle.setAttribute('r', '8');
                 circle.setAttribute('fill', color);
-                circle.setAttribute('stroke', '#000');
-                circle.setAttribute('stroke-width', '2');
                 overlay.appendChild(circle);
             });
 
@@ -852,8 +1174,8 @@ Reply with just ONE word from: food, technology, shopping, social, finance, ente
             const rect = document.createElementNS(ns, 'rect');
             rect.setAttribute('x', loc.topLeftCorner.x);
             rect.setAttribute('y', labelY - 26);
-            rect.setAttribute('width', '65');
-            rect.setAttribute('height', '26');
+            rect.setAttribute('width', '55');
+            rect.setAttribute('height', '24');
             rect.setAttribute('rx', '5');
             rect.setAttribute('fill', color);
             overlay.appendChild(rect);
@@ -862,85 +1184,14 @@ Reply with just ONE word from: food, technology, shopping, social, finance, ente
             text.setAttribute('x', loc.topLeftCorner.x + 8);
             text.setAttribute('y', labelY - 8);
             text.setAttribute('fill', '#000');
-            text.setAttribute('font-size', '14');
+            text.setAttribute('font-size', '13');
             text.setAttribute('font-weight', 'bold');
-            text.setAttribute('font-family', 'JetBrains Mono, monospace');
-            text.textContent = `QR #${index}`;
+            text.textContent = `#${index}`;
             overlay.appendChild(text);
         }
 
-        function updateStats(count) {
-            qrCountEl.textContent = count;
-            qrCountEl.classList.toggle('zero', count === 0);
-            qrCountEl.classList.toggle('active', count > 0);
-        }
-
-        function updateListStates() {
-            document.querySelectorAll('.qr-item').forEach(item => {
-                item.classList.toggle('active', activeQRs.has(item.dataset.qrData));
-            });
-        }
-
-        function updateQRList() {
-            if (detectedQRs.size === 0) {
-                qrListEl.innerHTML = `<div class="empty-state"><div class="empty-icon">📷</div><div class="empty-text">Point camera at QR codes</div></div>`;
-                return;
-            }
-
-            qrListEl.innerHTML = '';
-            Array.from(detectedQRs.values()).reverse().forEach(qr => {
-                const item = document.createElement('div');
-                item.className = 'qr-item' + (activeQRs.has(qr.data) ? ' active' : '');
-                item.dataset.qrData = qr.data;
-                
-                const isUrl = qr.data.startsWith('http') || qr.data.startsWith('www.');
-                const categoryInfo = CATEGORIES[qr.category] || CATEGORIES['other'];
-                const categoryClass = qr.category === 'loading' ? 'category-loading' : categoryInfo.class;
-                const categoryText = qr.category === 'loading' ? 'Analyzing...' : `${categoryInfo.icon} ${categoryInfo.name}`;
-                
-                item.innerHTML = `
-                    <div class="qr-header">
-                        <span class="qr-badge">QR #${qr.index}</span>
-                        <span class="category-badge ${categoryClass}">${categoryText}</span>
-                        <span class="qr-time">${qr.timestamp}</span>
-                    </div>
-                    <div class="qr-data">${escapeHtml(qr.data)}</div>
-                    <div class="qr-actions">
-                        <button class="btn btn-primary" onclick="copyText('${escapeAttr(qr.data)}')">Copy</button>
-                        ${isUrl ? `<button class="btn btn-secondary" onclick="openUrl('${escapeAttr(qr.data)}')">Open</button>` : ''}
-                    </div>
-                `;
-                qrListEl.appendChild(item);
-            });
-        }
-
-        function escapeHtml(t) {
-            const d = document.createElement('div');
-            d.textContent = t;
-            return d.innerHTML;
-        }
-
-        function escapeAttr(t) {
-            return t.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-        }
-
-        window.copyText = function(t) {
-            navigator.clipboard.writeText(t).then(() => showToast('Copied!')).catch(() => {
-                const ta = document.createElement('textarea');
-                ta.value = t;
-                document.body.appendChild(ta);
-                ta.select();
-                document.execCommand('copy');
-                document.body.removeChild(ta);
-                showToast('Copied!');
-            });
-        };
-
-        window.openUrl = function(u) {
-            window.open(u.startsWith('http') ? u : 'https://' + u, '_blank');
-        };
-
-        startBtn.addEventListener('click', startCamera);
+        // Initialize on load
+        init();
     </script>
 </body>
 </html>
