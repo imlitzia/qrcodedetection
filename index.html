@@ -596,12 +596,12 @@
             <div class="setup-section">
                 <!-- API Key -->
                 <div class="api-section">
-                    <div class="section-title">API Configuration</div>
+                    <div class="section-title">🔑 API Configuration (Required)</div>
                     <div class="api-input-group">
-                        <input type="password" id="apiKey" class="api-input" placeholder="OpenRouter API Key (optional)">
+                        <input type="password" id="apiKey" class="api-input" placeholder="Enter OpenRouter API Key">
                         <button id="saveApiBtn" class="api-btn">Save</button>
                     </div>
-                    <div id="apiStatus" class="api-status error">⚠️ API key is REQUIRED to use this system</div>
+                    <div id="apiStatus" class="api-status error">⚠️ API key is REQUIRED for AI categorization</div>
                 </div>
                 
                 <!-- Category Inputs -->
@@ -811,12 +811,12 @@
             openRouterApiKey = apiKeyInput.value.trim();
             if (openRouterApiKey) {
                 localStorage.setItem('openRouterApiKey', openRouterApiKey);
-                apiStatus.textContent = '✓ API key saved - Ready to scan!';
+                apiStatus.textContent = '✓ API key saved - AI ready!';
                 apiStatus.className = 'api-status connected';
                 showToast('✓ API key saved!');
             } else {
                 localStorage.removeItem('openRouterApiKey');
-                apiStatus.textContent = '⚠️ API key is REQUIRED to use this system';
+                apiStatus.textContent = '⚠️ API key is REQUIRED for AI categorization';
                 apiStatus.className = 'api-status error';
             }
         }
@@ -827,11 +827,11 @@
         }
 
         async function beginScanning() {
-            // Check if API key is provided
+            // Check if API key is provided - REQUIRED
             if (!openRouterApiKey) {
-                showToast('⚠️ API key required!');
+                showToast('⚠️ API key is required!');
                 apiKeyInput.focus();
-                apiStatus.textContent = '⚠️ API key is required to use this system';
+                apiStatus.textContent = '⚠️ Please enter your OpenRouter API key';
                 apiStatus.className = 'api-status error';
                 return;
             }
@@ -905,7 +905,7 @@
             showResults();
         }
 
-        // Generate AI-powered recommendations
+        // AI-powered recommendations using OpenRouter API
         async function generateAIRecommendations() {
             // Build inventory summary for AI
             const inventorySummary = [];
@@ -933,102 +933,87 @@
 
             try {
                 console.log('Generating AI recommendations...');
-                console.log('Inventory summary:', inventorySummary);
                 
-                // Try each model until one works
-                for (let i = 0; i < FREE_MODELS.length; i++) {
-                    const modelToUse = FREE_MODELS[(currentModelIndex + i) % FREE_MODELS.length];
-                    console.log('Trying model for recommendations:', modelToUse);
-                    
-                    try {
-                        const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'Authorization': `Bearer ${openRouterApiKey}`,
-                                'HTTP-Referer': window.location.origin || 'https://localhost',
-                                'X-Title': 'Coffee Inventory'
-                            },
-                            body: JSON.stringify({
-                                model: modelToUse,
-                                messages: [
-                                    {
-                                        role: 'user',
-                                        content: `Analyze this coffee shop inventory and give recommendations as JSON.
+                const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${openRouterApiKey}`,
+                        'HTTP-Referer': window.location.origin || 'https://localhost',
+                        'X-Title': 'Coffee Shop Inventory'
+                    },
+                    body: JSON.stringify({
+                        model: 'google/gemma-3-4b-it:free',
+                        messages: [
+                            {
+                                role: 'user',
+                                content: `You are a coffee shop inventory management AI. Analyze this inventory data and provide actionable recommendations.
 
-INVENTORY:
-${inventorySummary.map(item => `- ${item.category}: Expected ${item.expected}, Found ${item.scanned}, Diff ${item.difference}`).join('\n')}
+INVENTORY STATUS:
+${inventorySummary.map(item => `- ${item.category}: Expected ${item.expected}, Found ${item.scanned}, Difference ${item.difference > 0 ? '+' : ''}${item.difference}`).join('\n')}
 
-Total Expected: ${totalExpectedItems}, Total Found: ${detectedQRs.size}
+Total Expected: ${totalExpectedItems}
+Total Found: ${detectedQRs.size}
 
-Return a JSON array with recommendations. Format:
-[{"type":"critical/warning/info/success","icon":"emoji","action":"SHORT TITLE","detail":"advice"}]
+Provide recommendations as a JSON array. Each recommendation should have:
+- type: "critical" (urgent action needed), "warning" (attention needed), "info" (minor issue), or "success" (good status)
+- icon: emoji for the recommendation
+- action: short action title (e.g., "OUT OF STOCK: Milk", "RESTOCK NEEDED: Cups")
+- detail: specific actionable advice
 
-Use:
-- critical (🚨): out of stock or <25%
-- warning (⚠️): low stock or overstocked  
-- info (📋): minor issues
-- success (✅): good inventory
+Use these guidelines:
+- OUT OF STOCK (0 items): critical, 🚨, recommend immediate ordering
+- CRITICALLY LOW (<25%): critical, ⚠️, urgent refill needed
+- LOW STOCK (<50%): warning, 📦, schedule restocking
+- SLIGHTLY LOW: info, 📋, add to next order
+- OVERSTOCKED (>50% extra): warning, 📈, pause ordering
+- SLIGHTLY OVER: info, ➕, adjust expected count
+- OPTIMAL (exact match): success, ✅, no action needed
 
-Example: [{"type":"critical","icon":"🚨","action":"OUT OF STOCK: Milk","detail":"Order immediately"}]
+Return ONLY a valid JSON array like:
+[{"type":"critical","icon":"🚨","action":"OUT OF STOCK: Milk","detail":"No milk found. Order immediately to avoid service disruption."}]`
+                            }
+                        ],
+                        max_tokens: 800,
+                        temperature: 0.3
+                    })
+                });
 
-Return ONLY the JSON array.`
-                                    }
-                                ],
-                                max_tokens: 500,
-                                temperature: 0.2
-                            })
-                        });
+                if (!response.ok) {
+                    console.error('AI Recommendations API error:', response.status);
+                    return generateFallbackRecommendations();
+                }
 
-                        console.log('Recommendations status:', response.status);
-                        
-                        if (response.status === 404 || response.status === 429 || response.status === 503) {
-                            continue; // Try next model
-                        }
-                        
-                        if (!response.ok) {
-                            continue;
-                        }
-
-                        const data = await response.json();
-                        console.log('Recommendations response:', data);
-                        
-                        let content = data.choices?.[0]?.message?.content?.trim() || '[]';
-                        console.log('Raw content:', content);
-                        
-                        // Try to extract JSON from the response
-                        const jsonMatch = content.match(/\[[\s\S]*?\]/);
-                        if (jsonMatch) {
-                            content = jsonMatch[0];
-                        }
-                        
-                        const recommendations = JSON.parse(content);
-                        console.log('Parsed recommendations:', recommendations);
-                        return recommendations;
-                        
-                    } catch (modelError) {
-                        console.error('Model error:', modelError);
-                        continue;
-                    }
+                const data = await response.json();
+                console.log('AI Recommendations response:', data);
+                
+                let content = data.choices?.[0]?.message?.content?.trim() || '[]';
+                
+                // Try to extract JSON from the response
+                const jsonMatch = content.match(/\[[\s\S]*\]/);
+                if (jsonMatch) {
+                    content = jsonMatch[0];
                 }
                 
-                // All models failed, use fallback
-                throw new Error('All models failed');
+                const recommendations = JSON.parse(content);
+                console.log('Parsed AI recommendations:', recommendations);
+                return recommendations;
+                
             } catch (error) {
                 console.error('AI recommendations error:', error);
-                // Fallback to basic recommendations if AI fails
-                return generateBasicRecommendations();
+                return generateFallbackRecommendations();
             }
         }
         
-        // Fallback basic recommendations (used if AI fails)
-        function generateBasicRecommendations() {
+        // Fallback recommendations if AI fails
+        function generateFallbackRecommendations() {
             const recommendations = [];
             
             Object.entries(CATEGORIES).forEach(([key, cat]) => {
                 const expected = expectedCounts[key] || 0;
                 const scanned = scannedCounts[key] || 0;
                 const diff = scanned - expected;
+                const percentFilled = expected > 0 ? (scanned / expected) * 100 : 0;
                 
                 if (expected > 0 || scanned > 0) {
                     if (scanned === 0 && expected > 0) {
@@ -1038,21 +1023,42 @@ Return ONLY the JSON array.`
                             action: `OUT OF STOCK: ${cat.name}`,
                             detail: `Expected ${expected} items but found 0. Immediate restocking required!`
                         });
-                    } else if (diff < 0) {
+                    } else if (diff < 0 && percentFilled < 25) {
+                        recommendations.push({
+                            type: 'critical',
+                            icon: '⚠️',
+                            action: `CRITICALLY LOW: ${cat.name}`,
+                            detail: `Only ${scanned}/${expected} items (${Math.round(percentFilled)}%). Urgent refill needed!`
+                        });
+                    } else if (diff < 0 && percentFilled < 50) {
                         recommendations.push({
                             type: 'warning',
                             icon: '📦',
                             action: `LOW STOCK: ${cat.name}`,
-                            detail: `${scanned}/${expected} items. Missing ${Math.abs(diff)} - please restock.`
+                            detail: `${scanned}/${expected} items. Schedule restocking soon.`
                         });
-                    } else if (diff > 0) {
+                    } else if (diff < 0) {
+                        recommendations.push({
+                            type: 'info',
+                            icon: '📋',
+                            action: `RESTOCK NEEDED: ${cat.name}`,
+                            detail: `Missing ${Math.abs(diff)} item(s). Add to next order.`
+                        });
+                    } else if (diff > expected * 0.5 && expected > 0) {
                         recommendations.push({
                             type: 'warning',
                             icon: '📈',
                             action: `OVERSTOCKED: ${cat.name}`,
-                            detail: `${scanned}/${expected} items (+${diff} extra). Consider reducing orders.`
+                            detail: `${scanned}/${expected} items (+${diff} extra). Pause ordering.`
                         });
-                    } else {
+                    } else if (diff > 0) {
+                        recommendations.push({
+                            type: 'info',
+                            icon: '➕',
+                            action: `EXCESS INVENTORY: ${cat.name}`,
+                            detail: `${diff} extra item(s). Consider adjusting expected count.`
+                        });
+                    } else if (diff === 0 && expected > 0) {
                         recommendations.push({
                             type: 'success',
                             icon: '✅',
@@ -1299,18 +1305,7 @@ Return ONLY the JSON array.`
             });
         }
 
-        // List of free models to try (in order of preference)
-        const FREE_MODELS = [
-            'mistralai/mistral-7b-instruct:free',
-            'huggingfaceh4/zephyr-7b-beta:free',
-            'openchat/openchat-7b:free',
-            'nousresearch/nous-capybara-7b:free',
-            'gryphe/mythomist-7b:free'
-        ];
-        
-        let currentModelIndex = 0;
-
-        // AI-powered categorization for coffee shop inventory - ONLY uses AI, no local fallback
+        // AI-powered categorization using OpenRouter API - REQUIRED
         async function categorizeWithLLM(qrData, qrIndex) {
             // API key is required
             if (!openRouterApiKey) {
@@ -1318,106 +1313,71 @@ Return ONLY the JSON array.`
                 return 'other';
             }
 
-            // Try each model until one works
-            for (let i = 0; i < FREE_MODELS.length; i++) {
-                const modelToUse = FREE_MODELS[(currentModelIndex + i) % FREE_MODELS.length];
+            try {
+                showToast('🤖 AI analyzing...');
                 
-                try {
-                    showToast(`🤖 AI analyzing...`);
-                    console.log('Trying model:', modelToUse);
-                    console.log('QR Data:', qrData);
-                    
-                    const requestBody = {
-                        model: modelToUse,
+                const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${openRouterApiKey}`,
+                        'HTTP-Referer': window.location.origin || 'https://localhost',
+                        'X-Title': 'Coffee Shop Inventory'
+                    },
+                    body: JSON.stringify({
+                        model: 'google/gemma-3-4b-it:free',
                         messages: [
                             {
                                 role: 'user',
-                                content: `Categorize this coffee shop inventory item into exactly one category.
+                                content: `You are a coffee shop inventory categorization AI. Analyze this QR code content and categorize it.
+
+QR Code Content: "${qrData}"
 
 Categories:
-- milk (dairy, milk alternatives, cream, half-and-half)
-- coffee_beans (coffee beans, ground coffee, espresso, roasts)
-- cups (cups, lids, sleeves, straws, containers)
-- other (anything else)
+- milk: Any dairy products, milk alternatives (oat milk, almond milk, soy milk), cream, half-and-half, lactose-free milk
+- coffee_beans: Coffee beans, ground coffee, espresso, roasts, any coffee products
+- cups: Cups, lids, sleeves, straws, containers, drinkware, tumblers
+- other: Anything that doesn't fit the above categories
 
-Item: "${qrData}"
-
-Reply with only the category name (milk, coffee_beans, cups, or other). Nothing else.`
+Respond with ONLY ONE word: milk, coffee_beans, cups, or other. Nothing else.`
                             }
                         ],
                         max_tokens: 10,
                         temperature: 0
-                    };
-                    
-                    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${openRouterApiKey}`,
-                            'HTTP-Referer': window.location.origin || 'https://localhost',
-                            'X-Title': 'Coffee Inventory'
-                        },
-                        body: JSON.stringify(requestBody)
-                    });
+                    })
+                });
 
-                    console.log('Response status:', response.status);
-                    
-                    if (response.status === 404) {
-                        console.log(`Model ${modelToUse} not found, trying next...`);
-                        continue; // Try next model
-                    }
-                    
-                    if (!response.ok) {
-                        const errorText = await response.text();
-                        console.error('API error:', errorText);
-                        
-                        // If rate limited or other error, try next model
-                        if (response.status === 429 || response.status === 503) {
-                            console.log('Rate limited, trying next model...');
-                            continue;
-                        }
-                        
-                        showToast(`⚠️ API Error: ${response.status}`);
-                        return 'other';
-                    }
-
-                    const data = await response.json();
-                    console.log('API Response:', data);
-                    
-                    const rawContent = data.choices?.[0]?.message?.content || '';
-                    console.log('Raw AI response:', rawContent);
-                    
-                    // Remember which model worked
-                    currentModelIndex = (currentModelIndex + i) % FREE_MODELS.length;
-                    
-                    // Extract category from response
-                    let category = rawContent.trim().toLowerCase();
-                    
-                    // Clean up the response - extract just the category word
-                    if (category.includes('milk')) category = 'milk';
-                    else if (category.includes('coffee_beans') || category.includes('coffee beans') || category.includes('coffee')) category = 'coffee_beans';
-                    else if (category.includes('cups') || category.includes('cup')) category = 'cups';
-                    else category = 'other';
-                    
-                    console.log('Final category:', category);
-                    
-                    if (CATEGORIES[category]) {
-                        showToast(`🤖 ${CATEGORIES[category].icon} ${CATEGORIES[category].name}`);
-                        return category;
-                    }
-                    
-                    showToast('🤖 📦 Uncategorized');
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error('API Error:', response.status, errorText);
+                    showToast(`⚠️ API Error: ${response.status}`);
                     return 'other';
-                    
-                } catch (error) {
-                    console.error('Error with model', modelToUse, ':', error);
-                    continue; // Try next model
                 }
+
+                const data = await response.json();
+                console.log('AI Response:', data);
+                
+                let rawCategory = data.choices?.[0]?.message?.content?.trim().toLowerCase() || 'other';
+                
+                // Clean up the response - extract just the category word
+                let category = rawCategory.replace(/[^a-z_]/g, '');
+                
+                // Handle variations
+                if (category.includes('milk')) category = 'milk';
+                else if (category.includes('coffeebeans') || category.includes('coffee')) category = 'coffee_beans';
+                else if (category.includes('cups') || category.includes('cup')) category = 'cups';
+                else category = 'other';
+                
+                if (CATEGORIES[category]) {
+                    showToast(`🤖 ${CATEGORIES[category].icon} ${CATEGORIES[category].name}`);
+                    return category;
+                }
+                return 'other';
+            } catch (error) {
+                console.error('Categorization error:', error);
+                showToast('⚠️ AI error - check console');
+                return 'other';
             }
-            
-            // All models failed
-            showToast('⚠️ All AI models unavailable');
-            return 'other';
         }
 
         function showToast(msg) {
