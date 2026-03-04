@@ -454,12 +454,15 @@
         });
 
         // Categorize QR code using LLM
-        async function categorizeWithLLM(qrData) {
+        async function categorizeWithLLM(qrData, qrIndex) {
             if (!openRouterApiKey) {
+                showToast('No API key - showing as Other');
                 return 'other';
             }
 
             try {
+                console.log(`[QR #${qrIndex}] Sending to LLM: ${qrData.substring(0, 50)}...`);
+                
                 const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
                     method: 'POST',
                     headers: {
@@ -499,20 +502,29 @@ Respond with ONLY the category name, nothing else.`
                 });
 
                 if (!response.ok) {
-                    console.error('LLM API error:', response.status);
+                    const errorText = await response.text();
+                    console.error('LLM API error:', response.status, errorText);
+                    showToast(`API Error: ${response.status}`);
                     return 'other';
                 }
 
                 const data = await response.json();
+                console.log(`[QR #${qrIndex}] LLM response:`, data);
+                
                 const category = data.choices[0]?.message?.content?.trim().toLowerCase() || 'other';
                 
                 // Validate category
                 if (CATEGORIES[category]) {
+                    const catInfo = CATEGORIES[category];
+                    showToast(`QR #${qrIndex}: ${catInfo.icon} ${catInfo.name}`);
                     return category;
                 }
+                
+                console.log(`[QR #${qrIndex}] Unknown category: ${category}, defaulting to other`);
                 return 'other';
             } catch (error) {
                 console.error('LLM categorization error:', error);
+                showToast(`Error: ${error.message}`);
                 return 'other';
             }
         }
@@ -731,7 +743,7 @@ Respond with ONLY the category name, nothing else.`
                 showToast(`QR #${detectedQRs.size} found!`);
                 
                 // Categorize with LLM in background
-                const category = await categorizeWithLLM(data);
+                const category = await categorizeWithLLM(data, detectedQRs.size);
                 
                 // Update category
                 const qrInfo = detectedQRs.get(data);
