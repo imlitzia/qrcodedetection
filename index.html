@@ -467,6 +467,66 @@
         .badge-missing { background: var(--warning); color: #fff; }
         .badge-extra { background: var(--accent-orange); color: #000; }
         
+        /* AI Recommendations */
+        .recommendations-card {
+            background: var(--bg-card);
+            border-radius: 12px;
+            padding: 15px;
+            margin: 15px 0;
+            border: 2px solid var(--accent);
+        }
+        .recommendations-title {
+            font-size: 0.8rem;
+            color: var(--accent);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .recommendation-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            padding: 10px;
+            background: rgba(0,0,0,0.2);
+            border-radius: 8px;
+            margin-bottom: 8px;
+        }
+        .recommendation-item:last-child {
+            margin-bottom: 0;
+        }
+        .recommendation-icon {
+            font-size: 1.2rem;
+            flex-shrink: 0;
+        }
+        .recommendation-content {
+            flex: 1;
+        }
+        .recommendation-action {
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--text);
+            margin-bottom: 3px;
+        }
+        .recommendation-detail {
+            font-size: 0.7rem;
+            color: var(--text-dim);
+        }
+        .recommendation-item.critical {
+            border-left: 3px solid var(--warning);
+        }
+        .recommendation-item.warning {
+            border-left: 3px solid var(--accent-orange);
+        }
+        .recommendation-item.success {
+            border-left: 3px solid var(--success);
+        }
+        .recommendation-item.info {
+            border-left: 3px solid var(--accent);
+        }
+        
         .action-buttons {
             display: flex;
             gap: 10px;
@@ -490,6 +550,10 @@
         .action-btn.secondary {
             background: var(--border);
             color: var(--text);
+        }
+        .action-btn.download {
+            background: #4dabf7;
+            color: #fff;
         }
         
         .empty-state {
@@ -626,9 +690,20 @@
                 <div class="section-title">Category Breakdown</div>
                 <div id="categoryResults"></div>
                 
+                <!-- AI Recommendations -->
+                <div class="recommendations-card">
+                    <div class="recommendations-title">
+                        🤖 AI Recommendations
+                    </div>
+                    <div id="aiRecommendations"></div>
+                </div>
+                
+                <div class="action-buttons">
+                    <button id="downloadCsvBtn" class="action-btn download">📥 Download CSV</button>
+                </div>
                 <div class="action-buttons">
                     <button id="newScanBtn" class="action-btn primary">New Scan</button>
-                    <button id="exportBtn" class="action-btn secondary">Export</button>
+                    <button id="exportBtn" class="action-btn secondary">Copy Report</button>
                 </div>
             </div>
         </div>
@@ -709,6 +784,7 @@
             finishBtn.addEventListener('click', finishScanning);
             newScanBtn.addEventListener('click', resetAndStartNew);
             exportBtn.addEventListener('click', exportResults);
+            document.getElementById('downloadCsvBtn').addEventListener('click', downloadCSV);
         }
 
         function createCategoryInputs() {
@@ -826,6 +902,118 @@
             showResults();
         }
 
+        function generateRecommendations() {
+            const recommendations = [];
+            
+            Object.entries(CATEGORIES).forEach(([key, cat]) => {
+                const expected = expectedCounts[key] || 0;
+                const scanned = scannedCounts[key] || 0;
+                const diff = scanned - expected;
+                const percentFilled = expected > 0 ? (scanned / expected) * 100 : 0;
+                
+                if (expected > 0 || scanned > 0) {
+                    if (scanned === 0 && expected > 0) {
+                        // Out of stock - critical
+                        recommendations.push({
+                            type: 'critical',
+                            icon: '🚨',
+                            category: key,
+                            action: `OUT OF STOCK: ${cat.name}`,
+                            detail: `Expected ${expected} items but found 0. Immediate restocking required!`,
+                            priority: 1
+                        });
+                    } else if (diff < 0 && percentFilled < 25) {
+                        // Very low stock - critical
+                        recommendations.push({
+                            type: 'critical',
+                            icon: '⚠️',
+                            category: key,
+                            action: `CRITICALLY LOW: ${cat.name}`,
+                            detail: `Only ${scanned}/${expected} items (${Math.round(percentFilled)}%). Urgent refill needed - order immediately!`,
+                            priority: 2
+                        });
+                    } else if (diff < 0 && percentFilled < 50) {
+                        // Low stock - warning
+                        recommendations.push({
+                            type: 'warning',
+                            icon: '📦',
+                            category: key,
+                            action: `LOW STOCK: ${cat.name}`,
+                            detail: `${scanned}/${expected} items (${Math.round(percentFilled)}%). Schedule restocking soon.`,
+                            priority: 3
+                        });
+                    } else if (diff < 0) {
+                        // Slightly below - info
+                        recommendations.push({
+                            type: 'info',
+                            icon: '📋',
+                            category: key,
+                            action: `RESTOCK NEEDED: ${cat.name}`,
+                            detail: `Missing ${Math.abs(diff)} item(s). Add to next order.`,
+                            priority: 4
+                        });
+                    } else if (diff > expected * 0.5 && expected > 0) {
+                        // Significantly overstocked - warning
+                        recommendations.push({
+                            type: 'warning',
+                            icon: '📈',
+                            category: key,
+                            action: `OVERSTOCKED: ${cat.name}`,
+                            detail: `${scanned}/${expected} items (+${diff} extra). Pause ordering and review demand.`,
+                            priority: 5
+                        });
+                    } else if (diff > 0) {
+                        // Slightly over - info
+                        recommendations.push({
+                            type: 'info',
+                            icon: '➕',
+                            category: key,
+                            action: `EXCESS INVENTORY: ${cat.name}`,
+                            detail: `${diff} extra item(s). Consider adjusting expected count or reducing orders.`,
+                            priority: 6
+                        });
+                    } else if (diff === 0 && expected > 0) {
+                        // Perfect - success
+                        recommendations.push({
+                            type: 'success',
+                            icon: '✅',
+                            category: key,
+                            action: `OPTIMAL: ${cat.name}`,
+                            detail: `All ${expected} items accounted for. Inventory is at target level.`,
+                            priority: 7
+                        });
+                    }
+                }
+            });
+            
+            // Sort by priority
+            recommendations.sort((a, b) => a.priority - b.priority);
+            
+            // Add overall recommendation
+            const totalScanned = detectedQRs.size;
+            const overallPercent = totalExpectedItems > 0 ? (totalScanned / totalExpectedItems) * 100 : 0;
+            
+            if (overallPercent === 100) {
+                recommendations.unshift({
+                    type: 'success',
+                    icon: '🎉',
+                    action: 'INVENTORY COMPLETE',
+                    detail: 'All expected items have been scanned. No action required.',
+                    priority: 0
+                });
+            } else if (overallPercent < 50) {
+                recommendations.unshift({
+                    type: 'critical',
+                    icon: '🔴',
+                    action: 'MAJOR SHORTAGE DETECTED',
+                    detail: `Only ${Math.round(overallPercent)}% of inventory found. Review supply chain immediately.`,
+                    priority: 0
+                });
+            }
+            
+            return recommendations;
+        }
+
         function showResults() {
             showScreen('resultsScreen');
             
@@ -883,6 +1071,87 @@
             });
             
             document.getElementById('summaryMissing').textContent = totalMissing;
+            
+            // Generate and display AI recommendations
+            const recommendations = generateRecommendations();
+            const aiRecommendationsEl = document.getElementById('aiRecommendations');
+            aiRecommendationsEl.innerHTML = '';
+            
+            recommendations.forEach(rec => {
+                const item = document.createElement('div');
+                item.className = `recommendation-item ${rec.type}`;
+                item.innerHTML = `
+                    <span class="recommendation-icon">${rec.icon}</span>
+                    <div class="recommendation-content">
+                        <div class="recommendation-action">${rec.action}</div>
+                        <div class="recommendation-detail">${rec.detail}</div>
+                    </div>
+                `;
+                aiRecommendationsEl.appendChild(item);
+            });
+        }
+
+        function downloadCSV() {
+            // Generate CSV content
+            let csv = 'QR Inventory Report\n';
+            csv += `Generated: ${new Date().toISOString()}\n\n`;
+            
+            // Summary section
+            csv += 'SUMMARY\n';
+            csv += 'Metric,Value\n';
+            csv += `Total Expected,${totalExpectedItems}\n`;
+            csv += `Total Scanned,${detectedQRs.size}\n`;
+            csv += `Total Missing,${Math.max(0, totalExpectedItems - detectedQRs.size)}\n\n`;
+            
+            // Category breakdown
+            csv += 'CATEGORY BREAKDOWN\n';
+            csv += 'Category,Expected,Scanned,Difference,Status\n';
+            
+            Object.entries(CATEGORIES).forEach(([key, cat]) => {
+                const expected = expectedCounts[key] || 0;
+                const scanned = scannedCounts[key] || 0;
+                if (expected > 0 || scanned > 0) {
+                    const diff = scanned - expected;
+                    let status = 'Complete';
+                    if (diff < 0) status = 'Missing';
+                    else if (diff > 0) status = 'Extra';
+                    csv += `"${cat.name}",${expected},${scanned},${diff},${status}\n`;
+                }
+            });
+            
+            csv += '\nSCANNED ITEMS\n';
+            csv += 'Category,QR Data,Scanned Time\n';
+            
+            detectedQRs.forEach((qr, data) => {
+                const cat = CATEGORIES[qr.category];
+                const escapedData = data.replace(/"/g, '""');
+                csv += `"${cat.name}","${escapedData}","${qr.time}"\n`;
+            });
+            
+            // AI Recommendations
+            csv += '\nAI RECOMMENDATIONS\n';
+            csv += 'Priority,Type,Action,Detail\n';
+            
+            const recommendations = generateRecommendations();
+            recommendations.forEach((rec, idx) => {
+                const escapedAction = rec.action.replace(/"/g, '""');
+                const escapedDetail = rec.detail.replace(/"/g, '""');
+                csv += `${idx + 1},"${rec.type}","${escapedAction}","${escapedDetail}"\n`;
+            });
+            
+            // Create and download file
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+            link.href = url;
+            link.download = `inventory-report-${timestamp}.csv`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+            
+            showToast('CSV downloaded!');
         }
 
         function resetAndStartNew() {
